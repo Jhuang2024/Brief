@@ -232,15 +232,32 @@ struct OpenRouterService {
         return String(decoding: data, as: UTF8.self)
     }
 
+    /// Tries several common error-body shapes before giving up. The
+    /// original version only understood `{"error": {"message": ...}}`
+    /// (OpenAI's shape) and silently returned an empty string for
+    /// anything else — including plain-text or differently-shaped JSON
+    /// from a gateway or rate limiter — which surfaced to the user as a
+    /// bare "request failed" with no actual explanation.
     private static func errorMessage(from data: Data) -> String {
-        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return ""
+        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let error = object["error"] as? [String: Any],
+               let message = error["message"] as? String {
+                return message
+            }
+            if let error = object["error"] as? String {
+                return error
+            }
+            if let message = object["message"] as? String {
+                return message
+            }
+            if let detail = object["detail"] as? String {
+                return detail
+            }
         }
-        if let error = object["error"] as? [String: Any],
-           let message = error["message"] as? String {
-            return message
-        }
-        return ""
+        // Not a recognized shape — surface the raw body so the actual
+        // provider response is visible instead of nothing at all.
+        let raw = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+        return raw.isEmpty ? "" : String(raw.prefix(300))
     }
 
     // MARK: - Response decoding
