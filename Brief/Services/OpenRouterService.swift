@@ -130,7 +130,7 @@ struct OpenRouterService {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let started = Date()
-        let (data, http) = try await sendWithRetry(request, maxRetries: 3)
+        let (data, http) = try await sendWithRetry(request, maxRetries: 2)
         let duration = Date().timeIntervalSince(started)
 
         guard (200..<300).contains(http.statusCode) else {

@@ -17,12 +17,48 @@ final class BriefingEngine {
         let id: String
         let title: String
         var status: Status = .pending
+        /// When this phase became active — lets the progress view show a
+        /// live elapsed-time counter instead of a static spinner, so a
+        /// long-but-still-working retry is visibly distinguishable from
+        /// an actual freeze.
+        var startedAt: Date?
     }
 
     enum EngineError: LocalizedError {
         case noUsableContent
+        case timedOut(stage: String)
         var errorDescription: String? {
-            "The research and editing steps produced no usable stories. The previous briefing was kept."
+            switch self {
+            case .noUsableContent:
+                return "The research and editing steps produced no usable stories. The previous briefing was kept."
+            case .timedOut(let stage):
+                return "\(stage) took too long and was stopped. The previous briefing was kept."
+            }
+        }
+    }
+
+    /// Races `operation` against a timer so a stuck request (e.g. a
+    /// provider silently hanging, or retries stacking up past what's
+    /// reasonable for someone actively watching the screen) fails
+    /// cleanly instead of leaving the progress view on a single static
+    /// phase indefinitely — which reads as a frozen app even though the
+    /// UI thread itself is never actually blocked.
+    private nonisolated static func withTimeout<T: Sendable>(
+        seconds: TimeInterval,
+        stage: String,
+        operation: @escaping @Sendable () async throws -> T
+    ) async throws -> T {
+        try await withThrowingTaskGroup(of: T.self) { group in
+            group.addTask { try await operation() }
+            group.addTask {
+                try await Task.sleep(nanoseconds: UInt64(seconds * 1_000_000_000))
+                throw EngineError.timedOut(stage: stage)
+            }
+            guard let result = try await group.next() else {
+                throw EngineError.timedOut(stage: stage)
+            }
+            group.cancelAll()
+            return result
         }
     }
 
@@ -451,19 +487,21 @@ final class BriefingEngine {
         providerOrder: [AIProvider]
     ) async throws -> ResearchPacket {
         let preferences = context.preferences
-        let result = try await completeWithFallback(
-            providerOrder: providerOrder,
-            openRouter: openRouter,
-            model: preferences.researchModel,
-            systemPrompt: BriefingPrompts.researchSystemPrompt,
-            userPrompt: BriefingPrompts.researchUserPrompt(group: group, context: context),
-            schemaName: "research_candidates",
-            schema: BriefingPrompts.researchSchema,
-            useStructuredOutput: preferences.useStructuredOutput,
-            webSearch: preferences.useWebSearchPlugin,
-            webResults: preferences.researchDepth.webResults,
-            temperature: 0.3
-        )
+        let result = try await withTimeout(seconds: 45, stage: "Research") {
+            try await completeWithFallback(
+                providerOrder: providerOrder,
+                openRouter: openRouter,
+                model: preferences.researchModel,
+                systemPrompt: BriefingPrompts.researchSystemPrompt,
+                userPrompt: BriefingPrompts.researchUserPrompt(group: group, context: context),
+                schemaName: "research_candidates",
+                schema: BriefingPrompts.researchSchema,
+                useStructuredOutput: preferences.useStructuredOutput,
+                webSearch: preferences.useWebSearchPlugin,
+                webResults: preferences.researchDepth.webResults,
+                temperature: 0.3
+            )
+        }
         let decoded = try JSONDecoder().decode(
             ResearchResponse.self,
             from: Data(Self.extractJSON(result.content).utf8)
@@ -507,20 +545,28 @@ final class BriefingEngine {
         providerOrder: [AIProvider],
         diagnostics: inout GenerationDiagnostics
     ) async throws -> (response: EditorResponse, modelUsed: String) {
-        let result = try await Self.completeWithFallback(
-            providerOrder: providerOrder,
-            openRouter: openRouter,
-            model: preferences.editorModel,
-            systemPrompt: BriefingPrompts.editorSystemPrompt,
-            userPrompt: BriefingPrompts.editorUserPrompt(
-                context: context, packets: packets, failedGroups: failedGroups
-            ),
-            schemaName: "daily_brief",
-            schema: BriefingPrompts.editorSchema,
-            useStructuredOutput: preferences.useStructuredOutput,
-            webSearch: false,
-            temperature: 0.2
-        )
+        // Captured as a local rather than referenced as self.openRouter
+        // inside the @Sendable closures below — capturing self (a
+        // MainActor-isolated, non-Sendable reference type) from an
+        // instance method would be a concurrency-checking error;
+        // capturing the plain-struct value directly is not.
+        let openRouter = self.openRouter
+        let result = try await Self.withTimeout(seconds: 45, stage: "Editing") {
+            try await Self.completeWithFallback(
+                providerOrder: providerOrder,
+                openRouter: openRouter,
+                model: preferences.editorModel,
+                systemPrompt: BriefingPrompts.editorSystemPrompt,
+                userPrompt: BriefingPrompts.editorUserPrompt(
+                    context: context, packets: packets, failedGroups: failedGroups
+                ),
+                schemaName: "daily_brief",
+                schema: BriefingPrompts.editorSchema,
+                useStructuredOutput: preferences.useStructuredOutput,
+                webSearch: false,
+                temperature: 0.2
+            )
+        }
         diagnostics.totalInputTokens += result.inputTokens
         diagnostics.totalOutputTokens += result.outputTokens
         diagnostics.steps.append(.init(
@@ -534,21 +580,23 @@ final class BriefingEngine {
         } catch {
             // One repair attempt: send the broken output and the error back.
             diagnostics.errors.append("Editor output failed to decode: \(error.localizedDescription). Attempting repair.")
-            let repair = try await Self.completeWithFallback(
-                providerOrder: providerOrder,
-                openRouter: openRouter,
-                model: preferences.editorModel,
-                systemPrompt: BriefingPrompts.editorSystemPrompt,
-                userPrompt: BriefingPrompts.repairPrompt(
-                    originalContent: result.content,
-                    decodeError: error.localizedDescription
-                ),
-                schemaName: "daily_brief",
-                schema: BriefingPrompts.editorSchema,
-                useStructuredOutput: preferences.useStructuredOutput,
-                webSearch: false,
-                temperature: 0.0
-            )
+            let repair = try await Self.withTimeout(seconds: 45, stage: "Editing repair") {
+                try await Self.completeWithFallback(
+                    providerOrder: providerOrder,
+                    openRouter: openRouter,
+                    model: preferences.editorModel,
+                    systemPrompt: BriefingPrompts.editorSystemPrompt,
+                    userPrompt: BriefingPrompts.repairPrompt(
+                        originalContent: result.content,
+                        decodeError: error.localizedDescription
+                    ),
+                    schemaName: "daily_brief",
+                    schema: BriefingPrompts.editorSchema,
+                    useStructuredOutput: preferences.useStructuredOutput,
+                    webSearch: false,
+                    temperature: 0.0
+                )
+            }
             diagnostics.totalInputTokens += repair.inputTokens
             diagnostics.totalOutputTokens += repair.outputTokens
             let response = try Self.decodeEditor(repair.content)
@@ -797,6 +845,9 @@ final class BriefingEngine {
     private func markPhase(_ id: String, _ status: PhaseProgress.Status) {
         guard let index = phases.firstIndex(where: { $0.id == id }) else { return }
         phases[index].status = status
+        if status == .active {
+            phases[index].startedAt = Date()
+        }
     }
 
     // MARK: - Diagnostics

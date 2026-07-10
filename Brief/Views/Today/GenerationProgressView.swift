@@ -36,6 +36,16 @@ struct GenerationProgressView: View {
                             .font(.system(size: 15))
                             .foregroundStyle(phase.status == .pending ? Color.inkSecondary : Color.ink)
                         Spacer()
+                        // A visibly ticking counter proves the phase is
+                        // still alive during a long retry — a static
+                        // spinner alone reads as frozen past a few
+                        // seconds even when it isn't.
+                        if phase.status == .active, let startedAt = phase.startedAt {
+                            Text(startedAt, style: .timer)
+                                .font(.system(size: 13, design: .monospaced))
+                                .foregroundStyle(Color.inkSecondary)
+                                .monospacedDigit()
+                        }
                     }
                     .animation(reducedMotion ? nil : .easeInOut(duration: 0.25), value: phase.status)
                     .accessibilityElement(children: .combine)

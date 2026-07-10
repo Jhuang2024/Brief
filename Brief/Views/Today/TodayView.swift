@@ -112,6 +112,12 @@ struct TodayView: View {
                 .font(.footnote)
                 .foregroundStyle(Color.inkSecondary)
             Spacer()
+            if let startedAt = active?.startedAt {
+                Text(startedAt, style: .timer)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundStyle(Color.inkSecondary)
+                    .monospacedDigit()
+            }
         }
         .padding(10)
         .background(Color.paperRaised, in: RoundedRectangle(cornerRadius: 8))
