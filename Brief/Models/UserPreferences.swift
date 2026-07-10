@@ -302,10 +302,39 @@ final class PreferencesStore {
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.key),
            let decoded = Self.decodeFillingMissingKeysWithDefaults(data) {
-            preferences = decoded
+            let migrated = Self.migratingKnownStaleModelDefaults(decoded)
+            preferences = migrated
+            // didSet doesn't fire for a property's own initial-value
+            // assignment in init(), so a migration wouldn't otherwise
+            // reach disk until some unrelated setting change happened to
+            // trigger a save — write it back explicitly right away.
+            if migrated != decoded {
+                save()
+            }
         } else {
             preferences = .default
         }
+    }
+
+    /// One-time migration for a specific default that turned out to be a
+    /// bad choice after already shipping: openai/gpt-oss-120b:free gets
+    /// upstream-rate-limited under real demand (confirmed in testing),
+    /// but changing UserPreferences.default only affects fresh installs
+    /// — a phone that already saved that value keeps using it forever
+    /// otherwise, since nothing here ever rewrites an already-saved
+    /// preference. This only touches an exact match of that specific
+    /// stale value, never a value the user deliberately chose themselves,
+    /// so it can't clobber an intentional customization.
+    private static func migratingKnownStaleModelDefaults(_ preferences: UserPreferences) -> UserPreferences {
+        var preferences = preferences
+        let staleDefault = "openai/gpt-oss-120b:free"
+        if preferences.researchModel == staleDefault {
+            preferences.researchModel = "auto:free"
+        }
+        if preferences.editorModel == staleDefault {
+            preferences.editorModel = "auto:free"
+        }
+        return preferences
     }
 
     private func save() {
