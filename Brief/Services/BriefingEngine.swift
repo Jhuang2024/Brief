@@ -27,12 +27,15 @@ final class BriefingEngine {
     enum EngineError: LocalizedError {
         case noUsableContent
         case timedOut(stage: String)
+        case invalidStructuredOutput(stage: String)
         var errorDescription: String? {
             switch self {
             case .noUsableContent:
                 return "The research and editing steps produced no usable stories. The previous briefing was kept."
             case .timedOut(let stage):
                 return "\(stage) took too long and was stopped. The previous briefing was kept."
+            case .invalidStructuredOutput(let stage):
+                return "\(stage) returned a response in the wrong format, even after one retry. This is usually a free-tier model hiccup — try refreshing again, or pin a specific model in Settings → Models. The previous briefing was kept."
             }
         }
     }
@@ -61,6 +64,20 @@ final class BriefingEngine {
             return result
         }
     }
+
+    /// Explicit output caps for the research and editor calls. Without a
+    /// `max_tokens` field at all, several OpenRouter-hosted free/open-weight
+    /// endpoints (confirmed with the openai/gpt-oss-120b and gpt-oss-20b
+    /// free tiers) fall back to a modest hosting default rather than
+    /// "however much the schema needs" — the editor's response in
+    /// particular, a full day's brief across every enabled section, easily
+    /// exceeds that default, gets cut off mid-JSON, and fails to decode
+    /// with a generic "data couldn't be read" error. That failure then
+    /// repeats on the one repair attempt too, since it re-sends the same
+    /// large schema. These are generous enough to cover a "thorough"
+    /// brief's full JSON without constraining the model's actual writing.
+    private static let researchMaxTokens = 4000
+    private static let editorMaxTokens = 8000
 
     private let store: BriefStore
     private let preferencesStore: PreferencesStore
@@ -309,8 +326,15 @@ final class BriefingEngine {
             markPhase("editing", .done)
         } catch {
             markPhase("editing", .failed)
+            // EngineError's own descriptions are already complete, specific
+            // sentences (e.g. "Editing took too long..."); only prefix a
+            // generic label for an error type that doesn't describe itself
+            // in terms of the editing stage.
+            let message = error is EngineError
+                ? error.localizedDescription
+                : "The editing step failed: \(error.localizedDescription)"
             finishWithFailure(
-                "The editing step failed: \(error.localizedDescription)",
+                message,
                 diagnostics: &diagnostics
             )
             return nil
@@ -471,7 +495,8 @@ final class BriefingEngine {
                 useStructuredOutput: preferences.useStructuredOutput,
                 webSearch: preferences.useWebSearchPlugin,
                 webResults: preferences.researchDepth.webResults,
-                temperature: 0.3
+                temperature: 0.3,
+                maxTokens: Self.researchMaxTokens
             )
         }
         let decoded = try JSONDecoder().decode(
@@ -536,7 +561,8 @@ final class BriefingEngine {
                 schema: BriefingPrompts.editorSchema,
                 useStructuredOutput: preferences.useStructuredOutput,
                 webSearch: false,
-                temperature: 0.2
+                temperature: 0.2,
+                maxTokens: Self.editorMaxTokens
             )
         }
         diagnostics.totalInputTokens += result.inputTokens
@@ -566,12 +592,26 @@ final class BriefingEngine {
                     schema: BriefingPrompts.editorSchema,
                     useStructuredOutput: preferences.useStructuredOutput,
                     webSearch: false,
-                    temperature: 0.0
+                    temperature: 0.0,
+                    maxTokens: Self.editorMaxTokens
                 )
             }
             diagnostics.totalInputTokens += repair.inputTokens
             diagnostics.totalOutputTokens += repair.outputTokens
-            let response = try Self.decodeEditor(repair.content)
+            let response: EditorResponse
+            do {
+                response = try Self.decodeEditor(repair.content)
+            } catch let repairDecodeError {
+                // Both the original and the one repair attempt produced
+                // output that doesn't decode — surface a clear, actionable
+                // message here rather than letting Swift's generic
+                // DecodingError.localizedDescription ("The data couldn't
+                // be read because it isn't in the correct format.") reach
+                // the user verbatim. The specific decode error is still
+                // captured in diagnostics for export.
+                diagnostics.errors.append("Editor repair output also failed to decode: \(repairDecodeError.localizedDescription).")
+                throw EngineError.invalidStructuredOutput(stage: "Editing")
+            }
             diagnostics.steps.append(.init(
                 name: "editor.repair", succeeded: true,
                 detail: "via \(repair.modelUsed)", duration: repair.duration
