@@ -46,8 +46,14 @@ final class TodayViewModel {
     }
 
     /// Load cache instantly, then generate if missing or stale.
+    /// Waits for launch setup (notably Google session restore) first, so
+    /// generation doesn't race ahead and see Calendar as disconnected
+    /// just because the previous Google session hadn't finished loading
+    /// yet — `ensureLaunched()` is memoized, so this is a no-op if launch
+    /// setup already finished.
     func onAppear() async {
         reloadFromStore()
+        await environment.ensureLaunched()
         await engine.generateIfNeeded(trigger: .launch)
         reloadFromStore()
     }

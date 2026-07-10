@@ -72,9 +72,22 @@ final class SettingsViewModel {
         do {
             try await googleAuth.connect()
             await loadCalendarList()
+            regenerateTodaysBriefIfNeeded()
         } catch {
             googleError = error.localizedDescription
         }
+    }
+
+    /// Today's cached brief was generated before this connection existed,
+    /// so it still shows Calendar as unavailable — regenerate once so it
+    /// reflects the new connection instead of leaving Jerry to guess that
+    /// a manual refresh is needed. Today picks this up automatically via
+    /// `engine.generationCounter`, regardless of which tab is open.
+    private func regenerateTodaysBriefIfNeeded() {
+        guard preferencesStore.preferences.includeCalendar else { return }
+        let brief = environment.briefStore.todaysBrief()
+        guard brief == nil || brief?.calendarWasAvailable == false else { return }
+        Task { await environment.engine.generate(trigger: .manual) }
     }
 
     func disconnectGoogle() {

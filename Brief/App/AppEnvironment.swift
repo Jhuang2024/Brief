@@ -27,6 +27,8 @@ final class AppEnvironment {
     /// "Open Settings" buttons).
     var selectedTab: RootTab = .today
 
+    private var launchTask: Task<Void, Never>?
+
     private init() {
         let schema = Schema([DailyBrief.self, BriefSection.self, BriefStory.self, BriefSource.self])
         do {
@@ -58,11 +60,26 @@ final class AppEnvironment {
     }
 
     /// Launch-time work: restore Google, prune history, schedule
-    /// background refresh and the morning reminder.
-    func onLaunch() async {
-        briefStore.pruneOldBriefs()
-        backgroundRefresh.scheduleNextRefresh()
-        await googleAuth.restorePreviousSession()
-        await notificationService.updateMorningReminder(preferences: preferencesStore.preferences)
+    /// background refresh and the morning reminder. Safe to call from
+    /// multiple places (the app-level launch task and Today's onAppear
+    /// both call this) — the underlying work runs exactly once, and every
+    /// caller awaits the same completion. This matters because Today's
+    /// generation reads `googleAuth`'s connection state to decide whether
+    /// Calendar is available; without this memoized await, generation
+    /// could start before Google's previous session finished restoring
+    /// and would wrongly report Calendar as unavailable.
+    func ensureLaunched() async {
+        if let launchTask {
+            await launchTask.value
+            return
+        }
+        let task = Task {
+            briefStore.pruneOldBriefs()
+            backgroundRefresh.scheduleNextRefresh()
+            await googleAuth.restorePreviousSession()
+            await notificationService.updateMorningReminder(preferences: preferencesStore.preferences)
+        }
+        launchTask = task
+        await task.value
     }
 }

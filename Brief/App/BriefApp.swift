@@ -19,7 +19,7 @@ struct BriefApp: App {
                     GIDSignIn.sharedInstance.handle(url)
                 }
                 .task {
-                    await environment.onLaunch()
+                    await environment.ensureLaunched()
                 }
         }
     }

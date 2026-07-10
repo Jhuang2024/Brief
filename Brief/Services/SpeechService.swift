@@ -20,11 +20,18 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
 
     private(set) var state: PlaybackState = .idle
     private(set) var currentSegmentIndex = 0
-    var rate: Float = AVSpeechUtteranceDefaultSpeechRate {
-        didSet {
-            // Applies from the next utterance onward.
-            rate = min(max(rate, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
-        }
+
+    /// Backing storage for `rate`. Clamping lives in the computed
+    /// property's setter rather than a `didSet` on `rate` itself —
+    /// reassigning a property from inside its own `didSet` re-triggers
+    /// that same `didSet`, which previously caused unbounded recursion
+    /// and a stack-overflow crash the instant the playback rate changed.
+    private var _rate: Float = AVSpeechUtteranceDefaultSpeechRate
+
+    /// Applies from the next utterance onward.
+    var rate: Float {
+        get { _rate }
+        set { _rate = min(max(newValue, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate) }
     }
 
     private let synthesizer = AVSpeechSynthesizer()
