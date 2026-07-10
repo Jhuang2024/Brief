@@ -161,8 +161,12 @@ struct UserPreferences: Codable, Equatable {
     var apiBaseURL: String = "https://openrouter.ai/api/v1"
     var useStructuredOutput: Bool = true
     var useWebSearchPlugin: Bool = true
-    var researchModel: String = "openrouter/auto"
-    var editorModel: String = "openrouter/auto"
+    // "auto:free" routes to free-tier models only, so research + editorial
+    // generation cost nothing on providers (e.g. Bazaarlink) that support
+    // this convention. Change in Settings -> Models if that ever isn't
+    // what's wanted.
+    var researchModel: String = "auto:free"
+    var editorModel: String = "auto:free"
     var researchDepth: ResearchDepth = .standard
 
     // Weather & location

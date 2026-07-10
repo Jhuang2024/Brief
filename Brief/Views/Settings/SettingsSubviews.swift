@@ -160,6 +160,7 @@ struct ModelsSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 
     private static let suggestedModels = [
+        "auto:free",
         "openrouter/auto",
         "anthropic/claude-sonnet-4.5",
         "openai/gpt-5.1",
@@ -173,7 +174,7 @@ struct ModelsSettingsView: View {
             Section {
                 modelField(title: "Research model", text: $store.preferences.researchModel)
             } footer: {
-                Text("Used for the web-grounded research requests. The suggestions below are OpenRouter's model-slug format (provider/model) — if you've changed the API base URL in AI Provider settings, use whatever slug that provider expects instead.")
+                Text("Used for the web-grounded research requests. Defaults to auto:free, which routes to free-tier models only on providers that support that convention. Most other suggestions below are OpenRouter's model-slug format (provider/model) — if you've changed the API base URL in AI Provider settings, use whatever slug that provider expects instead.")
                     .foregroundStyle(Color.inkSecondary)
             }
             Section {

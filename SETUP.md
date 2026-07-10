@@ -80,8 +80,9 @@ Base URL field so any compatible provider works without a rebuild.
      after a generation attempt: HTTP errors there usually name the
      rejected field.
 5. Optional: **Settings → Models** to change the research model, editor
-   model (default `openrouter/auto`, any provider-specific slug accepted)
-   or research depth.
+   model (default `auto:free`, which routes to free-tier models only on
+   providers that support that convention; any provider-specific slug is
+   accepted) or research depth.
 
 ---
 
