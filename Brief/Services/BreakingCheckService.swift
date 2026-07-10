@@ -104,6 +104,13 @@ final class BreakingCheckService {
             guard !headline.isEmpty, !summary.isEmpty, !whyItMatters.isEmpty,
                   URLValidation.isPlausible(sourceURL)
             else { return }
+            // Defense in depth on top of the HTTP-error catch below: a
+            // provider that's out of credit/quota can sometimes still
+            // return 200 with a schema-conforming apology stuffed into the
+            // content instead of a proper error. Never treat that as a
+            // real alert.
+            guard !Self.looksLikeProviderFailure(headline + " " + summary + " " + whyItMatters)
+            else { return }
 
             let domain = URLValidation.domain(of: sourceURL)
             let entities = Fingerprint.entities(from: headline + " " + summary)
@@ -126,10 +133,28 @@ final class BreakingCheckService {
             alertStore.save(alert)
             await notificationService.sendBreakingAlertNotification(headline: headline)
         } catch {
-            // Best-effort only: an hourly check failing (timeout, no
-            // provider reachable, malformed output) is treated the same
-            // as finding nothing — silently skip this hour.
+            // Best-effort only: an hourly check failing for any reason —
+            // a timeout, no provider reachable, malformed output, or an
+            // HTTP error such as 402 Payment Required / "insufficient
+            // credits" — is treated exactly the same as finding nothing:
+            // silently skip this hour. Never save an alert or send a
+            // notification for a failed check.
         }
+    }
+
+    /// Catches the rare case where a provider that's out of credit or
+    /// quota returns HTTP 200 with an apology instead of a proper error
+    /// status — the normal error path above only covers a thrown error,
+    /// so this is a second, content-based check on anything that did
+    /// decode successfully.
+    private static func looksLikeProviderFailure(_ text: String) -> Bool {
+        let lowered = text.lowercased()
+        let markers = [
+            "insufficient credit", "out of credit", "no credits",
+            "payment required", "quota exceeded", "quota has been exceeded",
+            "billing", "rate limit", "rate-limited", "api key", "unauthorized",
+        ]
+        return markers.contains { lowered.contains($0) }
     }
 
     private static func decode(_ content: String) -> BreakingCheckResponse? {
