@@ -31,18 +31,25 @@ struct HistoryView: View {
                 }
             }
             .toolbar {
-                if !viewModel.briefs.isEmpty {
+                // isDeletingAll checked independently of briefs.isEmpty —
+                // deleteAll() clears briefs immediately (before the
+                // underlying delete even runs, to avoid a SwiftData
+                // crash — see its doc comment), so by the time deletion
+                // is actually in progress the list is already empty and
+                // the trailing branch below would otherwise hide the
+                // spinner right when it's most useful.
+                if viewModel.isDeletingAll {
                     ToolbarItem(placement: .topBarTrailing) {
-                        if viewModel.isDeletingAll {
-                            ProgressView()
-                        } else {
-                            Button(role: .destructive) {
-                                viewModel.confirmDeleteAll = true
-                            } label: {
-                                Image(systemName: "trash")
-                            }
-                            .accessibilityLabel("Delete all history")
+                        ProgressView()
+                    }
+                } else if !viewModel.briefs.isEmpty {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button(role: .destructive) {
+                            viewModel.confirmDeleteAll = true
+                        } label: {
+                            Image(systemName: "trash")
                         }
+                        .accessibilityLabel("Delete all history")
                     }
                 }
             }

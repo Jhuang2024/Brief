@@ -15,6 +15,15 @@ struct TodayView: View {
         .task {
             await viewModel.onAppear()
         }
+        .onAppear {
+            // .task only runs the first time this view appears; switching
+            // back to this tab after e.g. deleting today's brief from
+            // Settings wouldn't otherwise refresh viewModel.brief, which
+            // would then render a deleted SwiftData object and crash the
+            // same way a stale reference does elsewhere. Cheap and safe
+            // to just always resync on every appearance.
+            viewModel.reloadFromStore()
+        }
         .onChange(of: environment.engine.generationCounter) {
             viewModel.reloadIfGenerationAdvanced()
         }

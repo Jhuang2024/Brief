@@ -63,11 +63,23 @@ final class HistoryViewModel {
     }
 
     /// Async and guarded against re-entry: a month of history can take a
-    /// perceptible moment to cascade-delete, and `isDeletingAll` lets the
-    /// view show that it's working instead of appearing to hang.
+    /// perceptible moment to cascade-delete.
+    ///
+    /// Clears `briefs` BEFORE the underlying delete runs, not after.
+    /// `DailyBrief` is a SwiftData `@Model`, individually
+    /// Observable-tracked — `deleteAllHistory()` yields periodically
+    /// while it works through a large history, and if the list were
+    /// still holding references to those exact objects during that
+    /// window, a re-render mid-loop would read a property off an object
+    /// that's already been deleted from the context, crashing with
+    /// SwiftData's "backing data was detached from a context without
+    /// resolving attribute faults." Clearing first means the list has
+    /// nothing left to render before any deletion happens, so there's
+    /// nothing left to race.
     func deleteAll() async {
         guard !isDeletingAll else { return }
         isDeletingAll = true
+        briefs = []
         await environment.briefStore.deleteAllHistory()
         reload()
         isDeletingAll = false
