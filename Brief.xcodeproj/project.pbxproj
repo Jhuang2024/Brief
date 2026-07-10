@@ -18,6 +18,9 @@
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		BF0000000000000000000002 /* Brief */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				BF0000000000000000000015 /* Exceptions for "Brief" folder in "Brief" target */,
+			);
 			explicitFileTypes = {
 			};
 			explicitFolders = (
@@ -26,6 +29,16 @@
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		BF0000000000000000000015 /* Exceptions for "Brief" folder in "Brief" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = BF0000000000000000000006 /* Brief */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		BF0000000000000000000003 /* Frameworks */ = {
