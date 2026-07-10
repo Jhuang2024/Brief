@@ -81,12 +81,11 @@ provider works without a rebuild.
      after a generation attempt: HTTP errors there usually name the
      rejected field.
 5. **Settings → Models** — research and editor models both default to
-   `openai/gpt-oss-120b:free`: OpenAI's open-weight GPT model (gpt-oss),
-   on the free tier, following the same `:free` suffix convention
-   OpenRouter uses. This slug is an informed guess about Bazaarlink's
-   catalog, not a verified one — run **Test Connection** after setup, and
-   if it's rejected, try `auto:free` or check Bazaarlink's own model list
-   for the exact free-tier slug.
+   `openai/gpt-4o-mini`. Run **Test Connection** after setup to confirm
+   Bazaarlink accepts that slug; if cost matters more than model choice,
+   `openai/gpt-oss-120b:free` or `auto:free` (also listed as suggestions
+   in that screen) route to free-tier models instead, on providers that
+   support the `:free` suffix convention.
 
 ---
 

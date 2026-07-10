@@ -162,16 +162,8 @@ struct UserPreferences: Codable, Equatable {
     var apiBaseURL: String = "https://bazaarlink.ai/api/v1"
     var useStructuredOutput: Bool = true
     var useWebSearchPlugin: Bool = true
-    // OpenAI's GPT-lineage model with a genuinely free tier is gpt-oss
-    // (open-weight, released mid-2025) — proprietary GPT-4o/GPT-5 class
-    // models aren't offered for free by routers since OpenAI itself
-    // charges for them. ":free" is the OpenRouter-style suffix Bazaarlink
-    // also appears to use for its no-cost tier. This slug is an informed
-    // guess, not a verified Bazaarlink catalog entry — confirm it with
-    // Settings -> AI Provider -> Test Connection, and change it there if
-    // Bazaarlink names it differently.
-    var researchModel: String = "openai/gpt-oss-120b:free"
-    var editorModel: String = "openai/gpt-oss-120b:free"
+    var researchModel: String = "openai/gpt-4o-mini"
+    var editorModel: String = "openai/gpt-4o-mini"
     var researchDepth: ResearchDepth = .standard
 
     // Weather & location
