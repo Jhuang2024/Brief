@@ -50,6 +50,11 @@ struct TodayView: View {
 
     private func briefScroll(_ brief: DailyBrief) -> some View {
         ScrollView {
+            // Explicit width constraint on the whole column, defensively
+            // — any child that doesn't clamp its own width (a horizontal
+            // ScrollView chief among them; fixed in TodayStripView) would
+            // otherwise be able to widen this VStack past the screen and
+            // make the entire vertical ScrollView pannable sideways.
             VStack(alignment: .leading, spacing: 0) {
                 MastheadView(
                     brief: brief,
@@ -88,6 +93,7 @@ struct TodayView: View {
                 )
                 .padding(.top, 20)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, viewModel.speech.state == .idle ? 24 : 96)
         }
         .refreshable {

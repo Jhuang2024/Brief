@@ -207,6 +207,7 @@ struct HistoryDetailView: View {
                 )
                 .padding(.top, 20)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.bottom, 24)
         }
         .scrollIndicators(.hidden)

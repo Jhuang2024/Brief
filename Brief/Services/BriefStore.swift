@@ -41,16 +41,26 @@ final class BriefStore {
         return (try? context.fetch(descriptor)) ?? []
     }
 
-    /// Save a new brief, replacing any existing brief for the same day.
-    /// Pruning runs detached rather than awaited so a save never blocks
-    /// on housekeeping.
+    /// Save a new brief. Deliberately does NOT delete any existing brief
+    /// for the same day here, even though it's being superseded, and
+    /// deliberately does NOT kick off pruning immediately either — a view
+    /// (Today, in particular) can still hold a live SwiftUI reference to
+    /// that exact object while this runs, since BriefingEngine flips
+    /// `isGenerating` to false (which is @Observable and triggers a
+    /// re-render) in a `defer` block moments before its caller gets a
+    /// chance to refetch and repoint that reference. Deleting the object
+    /// out from under a view that's still rendering it — even shortly
+    /// after save() returns, via a detached prune task — crashes with
+    /// SwiftData's "backing data was detached from a context without
+    /// resolving attribute faults." `brief(for:)`/`todaysBrief()` already
+    /// sort by `generatedAt` descending and take the first result, so a
+    /// temporary extra same-day row is harmless — it's always resolved
+    /// correctly to the newest one. `pruneOldBriefs()` already runs once
+    /// per launch via `AppEnvironment.ensureLaunched()`, before any
+    /// generation starts, which is the only point that's actually safe.
     func save(_ brief: DailyBrief) {
-        if let existing = self.brief(for: brief.briefingDate), existing.id != brief.id {
-            context.delete(existing)
-        }
         context.insert(brief)
         try? context.save()
-        Task { await pruneOldBriefs() }
     }
 
     func delete(_ brief: DailyBrief) {
@@ -107,18 +117,35 @@ final class BriefStore {
     /// Default retention: 30 days. Same chunked-yield treatment as
     /// `deleteAllHistory()` — this runs unattended on every launch, so a
     /// long unbroken deletion loop here would silently stall startup.
+    /// Also removes same-day briefs superseded by a newer generation
+    /// (see `save()` for why those aren't deleted immediately at save time).
     func pruneOldBriefs(now: Date = Date()) async {
-        guard let cutoff = Calendar.current.date(
+        if let cutoff = Calendar.current.date(
             byAdding: .day, value: -Self.retentionDays, to: Calendar.current.startOfDay(for: now)
-        ) else { return }
-        let stale = allBriefs().filter { $0.briefingDate < cutoff }
-        for (index, brief) in stale.enumerated() {
-            context.delete(brief)
-            if index % 5 == 4 {
-                try? context.save()
-                await Task.yield()
+        ) {
+            let stale = allBriefs().filter { $0.briefingDate < cutoff }
+            for (index, brief) in stale.enumerated() {
+                context.delete(brief)
+                if index % 5 == 4 {
+                    try? context.save()
+                    await Task.yield()
+                }
             }
         }
+        removeSupersededSameDayBriefs()
         try? context.save()
+    }
+
+    /// Keeps only the most recently generated brief for each calendar
+    /// day, deleting older duplicates left behind by `save()`.
+    private func removeSupersededSameDayBriefs() {
+        let calendar = Calendar.current
+        let byDay = Dictionary(grouping: allBriefs()) { calendar.startOfDay(for: $0.briefingDate) }
+        for (_, briefsForDay) in byDay where briefsForDay.count > 1 {
+            let newestFirst = briefsForDay.sorted { $0.generatedAt > $1.generatedAt }
+            for superseded in newestFirst.dropFirst() {
+                context.delete(superseded)
+            }
+        }
     }
 }

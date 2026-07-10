@@ -166,6 +166,16 @@ struct TodayStripView: View {
                 }
             }
             .scrollIndicators(.hidden)
+            // Without this, ScrollView(.horizontal) reports its content's
+            // natural width (wider than the screen, by design — that's
+            // what lets it scroll) as its ideal size to the enclosing
+            // VStack. That width then propagates all the way up through
+            // BriefContentView to Today's outer vertical ScrollView,
+            // making the whole page pannable sideways. Clamping this
+            // strip to the available width turns it back into a
+            // screen-width window with its own content scrolling inside
+            // it, instead of the window itself growing to fit the content.
+            .frame(maxWidth: .infinity)
 
             if let note = brief.weather?.practicalNote, !note.isEmpty {
                 Text(note)
