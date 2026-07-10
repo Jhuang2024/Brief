@@ -17,17 +17,20 @@ final class BackgroundRefreshService {
     private let store: BriefStore
     private let preferencesStore: PreferencesStore
     private let breakingCheckService: BreakingCheckService
+    private let googleAuth: GoogleAuthenticationService
 
     init(
         engine: BriefingEngine,
         store: BriefStore,
         preferencesStore: PreferencesStore,
-        breakingCheckService: BreakingCheckService
+        breakingCheckService: BreakingCheckService,
+        googleAuth: GoogleAuthenticationService
     ) {
         self.engine = engine
         self.store = store
         self.preferencesStore = preferencesStore
         self.breakingCheckService = breakingCheckService
+        self.googleAuth = googleAuth
     }
 
     /// Must be called before `didFinishLaunching` returns.
@@ -101,11 +104,22 @@ final class BackgroundRefreshService {
         // Always keep the chain alive for tomorrow.
         scheduleNextRefresh()
 
-        let work = Task { [engine, store] in
+        let work = Task { [engine, store, googleAuth] in
             if store.todaysBrief() != nil {
                 task.setTaskCompleted(success: true)
                 return
             }
+            // A BGAppRefreshTask can fire in a freshly-spawned process with
+            // no foreground launch preceding it, so nothing has called
+            // AppEnvironment.ensureLaunched() yet this run — GIDSignIn's
+            // `currentUser` is nil until a session is explicitly restored,
+            // even though a previous sign-in exists on disk. Without this,
+            // fetchCalendarContext's "is a session available" check passes
+            // (it only checks whether a previous sign-in exists), but the
+            // actual token fetch then fails because no session was ever
+            // restored into this process — silently generating a brief
+            // that reports Calendar as unavailable despite being connected.
+            await googleAuth.restorePreviousSession()
             await engine.generateIfNeeded(trigger: .background)
             task.setTaskCompleted(success: !Task.isCancelled)
         }

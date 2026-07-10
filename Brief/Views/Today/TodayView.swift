@@ -169,7 +169,12 @@ struct TodayView: View {
 
     private func partialBanner(_ brief: DailyBrief) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            Label("Some sections could not be updated.", systemImage: "exclamationmark.triangle")
+            // The generic heading intentionally doesn't restate "could not
+            // be updated" — brief.failureNotes already spells that out
+            // per-section right below (e.g. "Some sections could not be
+            // updated: World news."), and a fixed label repeating almost
+            // the same sentence read as a duplicated message.
+            Label("This briefing is incomplete", systemImage: "exclamationmark.triangle")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.ink)
             ForEach(brief.failureNotes, id: \.self) { note in

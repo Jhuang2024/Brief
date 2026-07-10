@@ -66,7 +66,8 @@ final class AppEnvironment {
             engine: engine,
             store: briefStore,
             preferencesStore: preferencesStore,
-            breakingCheckService: breakingCheck
+            breakingCheckService: breakingCheck,
+            googleAuth: googleAuth
         )
         speech = SpeechService()
     }
