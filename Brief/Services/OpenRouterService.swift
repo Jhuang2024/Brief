@@ -235,27 +235,59 @@ struct OpenRouterService {
     /// Tries several common error-body shapes before giving up. The
     /// original version only understood `{"error": {"message": ...}}`
     /// (OpenAI's shape) and silently returned an empty string for
-    /// anything else — including plain-text or differently-shaped JSON
-    /// from a gateway or rate limiter — which surfaced to the user as a
-    /// bare "request failed" with no actual explanation.
+    /// anything else, which surfaced to the user as a bare "request
+    /// failed" with no actual explanation.
+    ///
+    /// OpenRouter specifically wraps a failure from the upstream company
+    /// actually hosting a routed/free model as a generic top-level
+    /// `error.message` (often just "Provider returned error") while the
+    /// real reason sits one level deeper in `error.metadata` — `raw` (the
+    /// upstream's own error text) and `provider_name` (which upstream was
+    /// used). Surfacing those turns an opaque "Provider returned error"
+    /// into something like "Provider returned error (provider: Example
+    /// Inference Co) — rate limit exceeded", which actually says what
+    /// happened.
     private static func errorMessage(from data: Data) -> String {
-        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
-            if let error = object["error"] as? [String: Any],
-               let message = error["message"] as? String {
-                return message
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            // Not JSON at all — surface the raw body so something is
+            // visible instead of nothing.
+            let raw = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
+            return raw.isEmpty ? "" : String(raw.prefix(300))
+        }
+
+        if let error = object["error"] as? [String: Any] {
+            var parts: [String] = []
+            if let message = error["message"] as? String, !message.isEmpty {
+                parts.append(message)
             }
-            if let error = object["error"] as? String {
-                return error
+            if let metadata = error["metadata"] as? [String: Any] {
+                if let providerName = metadata["provider_name"] as? String {
+                    parts.append("(provider: \(providerName))")
+                }
+                if let raw = metadata["raw"] as? String, !raw.isEmpty {
+                    parts.append("— \(raw.prefix(200))")
+                } else if let rawObject = metadata["raw"] as? [String: Any] {
+                    if let nestedMessage = (rawObject["error"] as? [String: Any])?["message"] as? String {
+                        parts.append("— \(nestedMessage)")
+                    } else if let nestedMessage = rawObject["message"] as? String {
+                        parts.append("— \(nestedMessage)")
+                    }
+                }
             }
-            if let message = object["message"] as? String {
-                return message
-            }
-            if let detail = object["detail"] as? String {
-                return detail
+            if !parts.isEmpty {
+                return parts.joined(separator: " ")
             }
         }
-        // Not a recognized shape — surface the raw body so the actual
-        // provider response is visible instead of nothing at all.
+        if let error = object["error"] as? String {
+            return error
+        }
+        if let message = object["message"] as? String {
+            return message
+        }
+        if let detail = object["detail"] as? String {
+            return detail
+        }
+
         let raw = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
         return raw.isEmpty ? "" : String(raw.prefix(300))
     }
