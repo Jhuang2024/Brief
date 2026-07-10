@@ -1,10 +1,12 @@
 import SwiftUI
 
-/// Previously generated briefings, newest first. Open, delete one, or
-/// clear everything. Old briefings are never regenerated.
+/// Previously generated briefings, grouped by month like a newspaper
+/// archive index. Open, delete one, or clear everything. Old briefings
+/// are never regenerated.
 struct HistoryView: View {
     @Environment(AppEnvironment.self) private var environment
     @State private var viewModel = HistoryViewModel()
+    @State private var selectedBriefID: UUID?
 
     var body: some View {
         NavigationStack {
@@ -16,28 +18,14 @@ struct HistoryView: View {
                         message: "Each morning's brief is kept here for \(BriefStore.retentionDays) days."
                     )
                 } else {
-                    List {
-                        ForEach(viewModel.briefs) { brief in
-                            NavigationLink(value: brief.id) {
-                                HistoryRow(brief: brief)
-                            }
-                            .listRowBackground(Color.paper)
-                        }
-                        .onDelete { offsets in
-                            for index in offsets {
-                                viewModel.delete(viewModel.briefs[index])
-                            }
-                        }
-                    }
-                    .listStyle(.plain)
-                    .scrollContentBackground(.hidden)
+                    archiveList
                 }
             }
             .background(Color.paper)
             .toolbarBackground(Color.paper, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
             .navigationTitle("History")
-            .navigationDestination(for: UUID.self) { id in
+            .navigationDestination(item: $selectedBriefID) { id in
                 if let brief = viewModel.briefs.first(where: { $0.id == id }) {
                     HistoryDetailView(brief: brief)
                 }
@@ -68,36 +56,112 @@ struct HistoryView: View {
             viewModel.reloadIfGenerationAdvanced()
         }
     }
+
+    /// A plain, chrome-free list: no default separators, row insets, or
+    /// navigation-link disclosure chevrons, so the fine-rule dividers and
+    /// month headers read as one continuous editorial index rather than
+    /// a stock iOS list. Navigation is driven manually (`selectedBriefID`)
+    /// so the row can own its own custom chevron.
+    private var archiveList: some View {
+        List {
+            ForEach(Array(viewModel.groupedByMonth.enumerated()), id: \.element.id) { groupIndex, group in
+                Text(group.monthLabel.uppercased())
+                    .font(.overline)
+                    .kerning(1.4)
+                    .foregroundStyle(Color.inkSecondary)
+                    .padding(.horizontal, 20)
+                    .padding(.top, groupIndex == 0 ? 4 : 22)
+                    .padding(.bottom, 6)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.paper)
+
+                ForEach(Array(group.briefs.enumerated()), id: \.element.id) { index, brief in
+                    Button {
+                        Haptics.tap()
+                        selectedBriefID = brief.id
+                    } label: {
+                        HistoryRow(brief: brief)
+                    }
+                    .buttonStyle(.plain)
+                    .listRowInsets(EdgeInsets())
+                    .listRowSeparator(.hidden)
+                    .listRowBackground(Color.paper)
+                    .overlay(alignment: .bottom) {
+                        if index != group.briefs.count - 1 {
+                            FineRule().padding(.leading, 66)
+                        }
+                    }
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            viewModel.delete(brief)
+                        } label: {
+                            Label("Delete", systemImage: "trash")
+                        }
+                    }
+                }
+            }
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(Color.paper)
+    }
 }
 
+/// One archive row: a torn-calendar date block, headline, and meta line.
 private struct HistoryRow: View {
     let brief: DailyBrief
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 5) {
-            HStack(spacing: 8) {
-                Text(DateFormatting.mastheadDate.string(from: brief.briefingDate))
-                    .font(.serif(17))
+        HStack(alignment: .top, spacing: 14) {
+            VStack(spacing: 1) {
+                Text(DateFormatting.dayOfMonth.string(from: brief.briefingDate))
+                    .font(.serif(20, weight: .bold))
                     .foregroundStyle(Color.ink)
-                if brief.status != .complete {
-                    StatusBadge(
-                        text: brief.status.displayName,
-                        emphasis: brief.status == .partial ? .warning : .neutral
-                    )
-                }
-                Spacer()
-            }
-            if let headline = brief.topHeadline {
-                Text(headline)
-                    .font(.system(size: 13))
+                Text(DateFormatting.weekdayAbbreviated.string(from: brief.briefingDate).uppercased())
+                    .font(.system(size: 10, weight: .semibold))
+                    .kerning(0.6)
                     .foregroundStyle(Color.inkSecondary)
-                    .lineLimit(2)
             }
-            Text("\(brief.locationName) · \(brief.estimatedReadingMinutes) min · \(brief.totalStoryCount) stories")
-                .font(.caption2)
-                .foregroundStyle(Color.inkSecondary.opacity(0.8))
+            .frame(width: 40)
+            .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    if let headline = brief.topHeadline {
+                        Text(headline)
+                            .font(.system(size: 15.5, weight: .medium))
+                            .foregroundStyle(Color.ink)
+                            .lineLimit(2)
+                    } else {
+                        Text("No stories generated")
+                            .font(.system(size: 15.5, weight: .medium))
+                            .foregroundStyle(Color.inkSecondary)
+                    }
+                    Spacer(minLength: 0)
+                }
+                HStack(spacing: 6) {
+                    Text("\(brief.estimatedReadingMinutes) min · \(brief.totalStoryCount) stories")
+                    if brief.status != .complete {
+                        Text("·")
+                        StatusBadge(
+                            text: brief.status.displayName,
+                            emphasis: brief.status == .partial ? .warning : .neutral
+                        )
+                    }
+                }
+                .font(.caption)
+                .foregroundStyle(Color.inkSecondary)
+            }
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Color.inkSecondary.opacity(0.6))
+                .padding(.top, 4)
         }
-        .padding(.vertical, 4)
+        .padding(.horizontal, 20)
+        .padding(.vertical, 13)
+        .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
     }
 }

@@ -59,8 +59,17 @@ identifier is **not** required — it is an app-chosen string and stays
 
 ## 3. Google Calendar (one-time Google Cloud setup)
 
+**Already done for this build** — `Brief/Info.plist` already has a real
+`GIDClientID` and matching `CFBundleURLSchemes` entry wired in, so
+**Settings → Connect Google Calendar** should work as-is. The walkthrough
+below is only needed if you ever change the bundle identifier (which
+invalidates the existing iOS OAuth client) or want a client ID of your own.
+
 Because this is a private app, the Google Cloud project stays in *testing*
-mode forever — no verification, no publishing.
+mode forever — no verification, no publishing. There is no in-app field for
+the client ID: iOS OAuth clients have no client secret, but the redirect URL
+scheme they rely on has to be declared in Info.plist at build time, so the ID
+belongs there rather than in a runtime settings screen.
 
 1. Go to <https://console.cloud.google.com/> and create (or select) a project,
    e.g. "Brief".

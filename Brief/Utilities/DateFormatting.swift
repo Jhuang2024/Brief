@@ -25,6 +25,27 @@ enum DateFormatting {
         return f
     }()
 
+    /// "July 2026"
+    static let monthYear: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("MMMMyyyy")
+        return f
+    }()
+
+    /// "10"
+    static let dayOfMonth: DateFormatter = {
+        let f = DateFormatter()
+        f.dateFormat = "d"
+        return f
+    }()
+
+    /// "THU"
+    static let weekdayAbbreviated: DateFormatter = {
+        let f = DateFormatter()
+        f.setLocalizedDateFormatFromTemplate("EEE")
+        return f
+    }()
+
     /// "Jul 10"
     static let shortDate: DateFormatter = {
         let f = DateFormatter()

@@ -1,5 +1,12 @@
 import Foundation
 
+/// Briefs from one calendar month, newest first, for History's archive index.
+struct HistoryMonthGroup: Identifiable {
+    let id: String
+    let monthLabel: String
+    let briefs: [DailyBrief]
+}
+
 @MainActor
 @Observable
 final class HistoryViewModel {
@@ -11,6 +18,32 @@ final class HistoryViewModel {
 
     init(environment: AppEnvironment = .shared) {
         self.environment = environment
+    }
+
+    /// `briefs` grouped by month, preserving the newest-first order the
+    /// store already provides.
+    var groupedByMonth: [HistoryMonthGroup] {
+        let calendar = Calendar.current
+        var order: [DateComponents] = []
+        var buckets: [DateComponents: [DailyBrief]] = [:]
+
+        for brief in briefs {
+            let key = calendar.dateComponents([.year, .month], from: brief.briefingDate)
+            if buckets[key] == nil {
+                buckets[key] = []
+                order.append(key)
+            }
+            buckets[key]?.append(brief)
+        }
+
+        return order.map { key in
+            let date = calendar.date(from: key) ?? Date()
+            return HistoryMonthGroup(
+                id: "\(key.year ?? 0)-\(key.month ?? 0)",
+                monthLabel: DateFormatting.monthYear.string(from: date),
+                briefs: buckets[key] ?? []
+            )
+        }
     }
 
     func reload() {

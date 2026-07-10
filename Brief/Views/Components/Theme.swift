@@ -101,7 +101,7 @@ enum AppearanceConfiguration {
         navBar.backgroundColor = paper
         navBar.shadowColor = UIColor(Color.rule)
         navBar.titleTextAttributes = [.foregroundColor: ink]
-        navBar.largeTitleTextAttributes = [.foregroundColor: ink]
+        navBar.largeTitleTextAttributes = [.foregroundColor: ink, .font: Self.largeTitleSerifFont]
         UINavigationBar.appearance().standardAppearance = navBar
         UINavigationBar.appearance().scrollEdgeAppearance = navBar
         UINavigationBar.appearance().compactAppearance = navBar
@@ -123,5 +123,14 @@ enum AppearanceConfiguration {
 
         UITableView.appearance().backgroundColor = .clear
         UISwitch.appearance().onTintColor = accent
+    }
+
+    /// New York (serif design), bold, at the system large-title point size —
+    /// gives every screen's nav title the same editorial voice as the
+    /// masthead instead of the system sans-serif default.
+    private static var largeTitleSerifFont: UIFont {
+        let base = UIFontDescriptor.preferredFontDescriptor(withTextStyle: .largeTitle)
+        let serif = base.withDesign(.serif)?.withSymbolicTraits(.traitBold) ?? base
+        return UIFont(descriptor: serif, size: 0)
     }
 }
