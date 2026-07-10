@@ -158,8 +158,8 @@ final class SettingsViewModel {
         environment.briefStore.deleteTodaysBrief()
     }
 
-    func deleteAllHistory() {
-        environment.briefStore.deleteAllHistory()
+    func deleteAllHistory() async {
+        await environment.briefStore.deleteAllHistory()
     }
 
     func resetPreferences() {

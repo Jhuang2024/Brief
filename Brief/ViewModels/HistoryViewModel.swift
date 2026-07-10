@@ -15,6 +15,7 @@ final class HistoryViewModel {
 
     var briefs: [DailyBrief] = []
     var confirmDeleteAll = false
+    private(set) var isDeletingAll = false
 
     init(environment: AppEnvironment = .shared) {
         self.environment = environment
@@ -61,8 +62,14 @@ final class HistoryViewModel {
         reload()
     }
 
-    func deleteAll() {
-        environment.briefStore.deleteAllHistory()
+    /// Async and guarded against re-entry: a month of history can take a
+    /// perceptible moment to cascade-delete, and `isDeletingAll` lets the
+    /// view show that it's working instead of appearing to hang.
+    func deleteAll() async {
+        guard !isDeletingAll else { return }
+        isDeletingAll = true
+        await environment.briefStore.deleteAllHistory()
         reload()
+        isDeletingAll = false
     }
 }

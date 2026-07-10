@@ -74,7 +74,7 @@ final class AppEnvironment {
             return
         }
         let task = Task {
-            briefStore.pruneOldBriefs()
+            await briefStore.pruneOldBriefs()
             backgroundRefresh.scheduleNextRefresh()
             await googleAuth.restorePreviousSession()
             await notificationService.updateMorningReminder(preferences: preferencesStore.preferences)

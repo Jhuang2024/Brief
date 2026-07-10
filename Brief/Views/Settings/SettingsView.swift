@@ -205,7 +205,9 @@ struct SettingsView: View {
                 isPresented: $confirmDeleteAll,
                 titleVisibility: .visible
             ) {
-                Button("Delete All", role: .destructive) { viewModel.deleteAllHistory() }
+                Button("Delete All", role: .destructive) {
+                    Task { await viewModel.deleteAllHistory() }
+                }
                 Button("Cancel", role: .cancel) {}
             }
             Button("Reset preferences", role: .destructive) {

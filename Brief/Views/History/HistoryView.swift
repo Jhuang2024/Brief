@@ -33,12 +33,16 @@ struct HistoryView: View {
             .toolbar {
                 if !viewModel.briefs.isEmpty {
                     ToolbarItem(placement: .topBarTrailing) {
-                        Button(role: .destructive) {
-                            viewModel.confirmDeleteAll = true
-                        } label: {
-                            Image(systemName: "trash")
+                        if viewModel.isDeletingAll {
+                            ProgressView()
+                        } else {
+                            Button(role: .destructive) {
+                                viewModel.confirmDeleteAll = true
+                            } label: {
+                                Image(systemName: "trash")
+                            }
+                            .accessibilityLabel("Delete all history")
                         }
-                        .accessibilityLabel("Delete all history")
                     }
                 }
             }
@@ -47,7 +51,9 @@ struct HistoryView: View {
                 isPresented: Bindable(viewModel).confirmDeleteAll,
                 titleVisibility: .visible
             ) {
-                Button("Delete All", role: .destructive) { viewModel.deleteAll() }
+                Button("Delete All", role: .destructive) {
+                    Task { await viewModel.deleteAll() }
+                }
                 Button("Cancel", role: .cancel) {}
             }
         }

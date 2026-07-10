@@ -42,13 +42,15 @@ final class BriefStore {
     }
 
     /// Save a new brief, replacing any existing brief for the same day.
+    /// Pruning runs detached rather than awaited so a save never blocks
+    /// on housekeeping.
     func save(_ brief: DailyBrief) {
         if let existing = self.brief(for: brief.briefingDate), existing.id != brief.id {
             context.delete(existing)
         }
         context.insert(brief)
         try? context.save()
-        pruneOldBriefs()
+        Task { await pruneOldBriefs() }
     }
 
     func delete(_ brief: DailyBrief) {
@@ -62,9 +64,22 @@ final class BriefStore {
         }
     }
 
-    func deleteAllHistory() {
-        for brief in allBriefs() {
+    /// Deletes every stored brief. A month of history cascades through
+    /// thousands of section/story/source objects, and SwiftData's
+    /// `ModelContext` only runs on the main actor here — deleting them
+    /// all in one uninterrupted loop blocks the main thread for the
+    /// entire operation with nothing yielded back to the run loop, which
+    /// reads to the user as the app freezing. Chunking with periodic
+    /// `Task.yield()` calls keeps the UI responsive (spinners animate,
+    /// touches still register) across the same total work.
+    func deleteAllHistory() async {
+        let all = allBriefs()
+        for (index, brief) in all.enumerated() {
             context.delete(brief)
+            if index % 5 == 4 {
+                try? context.save()
+                await Task.yield()
+            }
         }
         try? context.save()
     }
@@ -89,13 +104,20 @@ final class BriefStore {
             }
     }
 
-    /// Default retention: 30 days.
-    func pruneOldBriefs(now: Date = Date()) {
+    /// Default retention: 30 days. Same chunked-yield treatment as
+    /// `deleteAllHistory()` — this runs unattended on every launch, so a
+    /// long unbroken deletion loop here would silently stall startup.
+    func pruneOldBriefs(now: Date = Date()) async {
         guard let cutoff = Calendar.current.date(
             byAdding: .day, value: -Self.retentionDays, to: Calendar.current.startOfDay(for: now)
         ) else { return }
-        for brief in allBriefs() where brief.briefingDate < cutoff {
+        let stale = allBriefs().filter { $0.briefingDate < cutoff }
+        for (index, brief) in stale.enumerated() {
             context.delete(brief)
+            if index % 5 == 4 {
+                try? context.save()
+                await Task.yield()
+            }
         }
         try? context.save()
     }
