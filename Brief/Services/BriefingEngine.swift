@@ -127,13 +127,10 @@ final class BriefingEngine {
             isGenerating = false
         }
 
-        guard KeychainService.loadAPIKey() != nil else {
-            lastError = OpenRouterService.OpenRouterError.missingAPIKey.errorDescription
-            return nil
-        }
         let preferences = preferencesStore.preferences
-        guard let apiBaseURL = preferences.resolvedAPIBaseURL else {
-            lastError = OpenRouterService.OpenRouterError.invalidBaseURL.errorDescription
+        let providerOrder = preferences.providerAttemptOrder
+        guard !providerOrder.isEmpty else {
+            lastError = OpenRouterService.OpenRouterError.missingAPIKey.errorDescription
             return nil
         }
 
@@ -187,7 +184,7 @@ final class BriefingEngine {
                 taskGroup.addTask {
                     do {
                         let packet = try await Self.runResearch(
-                            group: group, context: context, openRouter: openRouter, baseURL: apiBaseURL
+                            group: group, context: context, openRouter: openRouter, providerOrder: providerOrder
                         )
                         return (group, .success(packet))
                     } catch {
@@ -242,7 +239,7 @@ final class BriefingEngine {
                 packets: packets,
                 failedGroups: failedGroups,
                 preferences: preferences,
-                baseURL: apiBaseURL,
+                providerOrder: providerOrder,
                 diagnostics: &diagnostics
             )
             markPhase("editing", .done)
@@ -391,15 +388,64 @@ final class BriefingEngine {
         return ResearchGroup.allCases.filter { groups.contains($0) }
     }
 
+    /// Tries each provider in `providerOrder` (already filtered to ones
+    /// with a saved key) in turn, returning the first success. If every
+    /// attempt fails, throws a combined error naming each provider and
+    /// what went wrong with it, so a Settings misconfiguration is
+    /// diagnosable rather than just "it didn't work."
+    private nonisolated static func completeWithFallback(
+        providerOrder: [AIProvider],
+        openRouter: OpenRouterService,
+        model: String,
+        systemPrompt: String,
+        userPrompt: String,
+        schemaName: String,
+        schema: [String: Any],
+        useStructuredOutput: Bool,
+        webSearch: Bool,
+        webResults: Int = 10,
+        temperature: Double = 0.3
+    ) async throws -> OpenRouterService.CompletionResult {
+        var failures: [(AIProvider, Error)] = []
+        for provider in providerOrder {
+            guard let apiKey = KeychainService.loadAPIKey(provider.keychainKind) else { continue }
+            do {
+                return try await openRouter.complete(
+                    baseURL: provider.baseURL,
+                    apiKey: apiKey,
+                    model: model,
+                    systemPrompt: systemPrompt,
+                    userPrompt: userPrompt,
+                    schemaName: schemaName,
+                    schema: schema,
+                    useStructuredOutput: useStructuredOutput,
+                    webSearch: webSearch,
+                    webResults: webResults,
+                    temperature: temperature
+                )
+            } catch {
+                failures.append((provider, error))
+            }
+        }
+        if failures.count == 1, let only = failures.first {
+            throw only.1
+        }
+        let details = failures
+            .map { "\($0.0.displayName): \($0.1.localizedDescription)" }
+            .joined(separator: " ")
+        throw OpenRouterService.OpenRouterError.allProvidersFailed(details: details)
+    }
+
     private nonisolated static func runResearch(
         group: ResearchGroup,
         context: BriefContext,
         openRouter: OpenRouterService,
-        baseURL: URL
+        providerOrder: [AIProvider]
     ) async throws -> ResearchPacket {
         let preferences = context.preferences
-        let result = try await openRouter.complete(
-            baseURL: baseURL,
+        let result = try await completeWithFallback(
+            providerOrder: providerOrder,
+            openRouter: openRouter,
             model: preferences.researchModel,
             systemPrompt: BriefingPrompts.researchSystemPrompt,
             userPrompt: BriefingPrompts.researchUserPrompt(group: group, context: context),
@@ -450,11 +496,12 @@ final class BriefingEngine {
         packets: [ResearchPacket],
         failedGroups: [ResearchGroup],
         preferences: UserPreferences,
-        baseURL: URL,
+        providerOrder: [AIProvider],
         diagnostics: inout GenerationDiagnostics
     ) async throws -> (response: EditorResponse, modelUsed: String) {
-        let result = try await openRouter.complete(
-            baseURL: baseURL,
+        let result = try await Self.completeWithFallback(
+            providerOrder: providerOrder,
+            openRouter: openRouter,
             model: preferences.editorModel,
             systemPrompt: BriefingPrompts.editorSystemPrompt,
             userPrompt: BriefingPrompts.editorUserPrompt(
@@ -479,8 +526,9 @@ final class BriefingEngine {
         } catch {
             // One repair attempt: send the broken output and the error back.
             diagnostics.errors.append("Editor output failed to decode: \(error.localizedDescription). Attempting repair.")
-            let repair = try await openRouter.complete(
-                baseURL: baseURL,
+            let repair = try await Self.completeWithFallback(
+                providerOrder: providerOrder,
+                openRouter: openRouter,
                 model: preferences.editorModel,
                 systemPrompt: BriefingPrompts.editorSystemPrompt,
                 userPrompt: BriefingPrompts.repairPrompt(

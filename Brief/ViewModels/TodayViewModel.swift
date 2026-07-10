@@ -36,7 +36,7 @@ final class TodayViewModel {
     var preferences: UserPreferences { environment.preferencesStore.preferences }
     var speech: SpeechService { environment.speech }
 
-    var hasAPIKey: Bool { KeychainService.loadAPIKey() != nil }
+    var hasAPIKey: Bool { KeychainService.hasAnyAPIKey() }
 
     var freshness: BriefFreshness {
         if engine.isGenerating { return .updating }

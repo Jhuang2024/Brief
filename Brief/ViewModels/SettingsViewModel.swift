@@ -7,12 +7,20 @@ import UserNotifications
 final class SettingsViewModel {
     let environment: AppEnvironment
 
-    // OpenRouter key handling. The field is write-only style: the stored
-    // key is never echoed back in full.
-    var apiKeyInput = ""
-    var hasStoredKey = KeychainService.loadAPIKey() != nil
-    var connectionTestResult: String?
-    var isTestingConnection = false
+    // Per-provider key entry/test state. Flat, doubled-up properties
+    // rather than a dictionary/array so each provider's row in Settings
+    // binds directly without keyed-lookup binding gymnastics — the
+    // methods below are generic over AIProvider so the duplication stays
+    // out of the actual logic.
+    var openRouterKeyInput = ""
+    var hasOpenRouterKey = KeychainService.loadAPIKey(.openRouter) != nil
+    var openRouterTestResult: String?
+    var isTestingOpenRouter = false
+
+    var bazaarlinkKeyInput = ""
+    var hasBazaarlinkKey = KeychainService.loadAPIKey(.bazaarlink) != nil
+    var bazaarlinkTestResult: String?
+    var isTestingBazaarlink = false
 
     // Google Calendar
     var availableCalendars: [GoogleCalendarInfo] = []
@@ -26,48 +34,90 @@ final class SettingsViewModel {
     var preferencesStore: PreferencesStore { environment.preferencesStore }
     var googleAuth: GoogleAuthenticationService { environment.googleAuth }
 
-    // MARK: - OpenRouter
+    // MARK: - AI Provider keys
 
-    func saveAPIKey() {
-        let trimmed = apiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
+    func hasStoredKey(for provider: AIProvider) -> Bool {
+        provider == .openRouter ? hasOpenRouterKey : hasBazaarlinkKey
+    }
+
+    func testResult(for provider: AIProvider) -> String? {
+        provider == .openRouter ? openRouterTestResult : bazaarlinkTestResult
+    }
+
+    func isTesting(for provider: AIProvider) -> Bool {
+        provider == .openRouter ? isTestingOpenRouter : isTestingBazaarlink
+    }
+
+    func saveKey(for provider: AIProvider) {
+        let trimmed = inputText(for: provider).trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
         do {
-            try KeychainService.saveAPIKey(trimmed)
-            hasStoredKey = true
-            apiKeyInput = ""
-            connectionTestResult = "Key saved to the Keychain."
+            try KeychainService.saveAPIKey(trimmed, kind: provider.keychainKind)
+            setHasStoredKey(true, for: provider)
+            setInputText("", for: provider)
+            setTestResult("Key saved to the Keychain.", for: provider)
             Haptics.tick()
         } catch {
-            connectionTestResult = error.localizedDescription
+            setTestResult(error.localizedDescription, for: provider)
         }
     }
 
-    func removeAPIKey() {
-        try? KeychainService.deleteAPIKey()
-        hasStoredKey = false
-        connectionTestResult = nil
+    func removeKey(for provider: AIProvider) {
+        try? KeychainService.deleteAPIKey(provider.keychainKind)
+        setHasStoredKey(false, for: provider)
+        setTestResult(nil, for: provider)
     }
 
-    func testConnection() {
-        guard let key = KeychainService.loadAPIKey() else {
-            connectionTestResult = "No API key saved yet."
+    func testConnection(for provider: AIProvider) {
+        guard let key = KeychainService.loadAPIKey(provider.keychainKind) else {
+            setTestResult("No API key saved yet.", for: provider)
             return
         }
-        guard let baseURL = preferencesStore.preferences.resolvedAPIBaseURL else {
-            connectionTestResult = OpenRouterService.OpenRouterError.invalidBaseURL.errorDescription
-            return
-        }
-        isTestingConnection = true
-        connectionTestResult = nil
+        setIsTesting(true, for: provider)
+        setTestResult(nil, for: provider)
         let model = preferencesStore.preferences.editorModel
+        let baseURL = provider.baseURL
         Task {
             do {
-                connectionTestResult = try await OpenRouterService()
+                let result = try await OpenRouterService()
                     .testConnection(baseURL: baseURL, apiKey: key, model: model)
+                setTestResult(result, for: provider)
             } catch {
-                connectionTestResult = error.localizedDescription
+                setTestResult(error.localizedDescription, for: provider)
             }
-            isTestingConnection = false
+            setIsTesting(false, for: provider)
+        }
+    }
+
+    private func inputText(for provider: AIProvider) -> String {
+        provider == .openRouter ? openRouterKeyInput : bazaarlinkKeyInput
+    }
+
+    private func setInputText(_ value: String, for provider: AIProvider) {
+        switch provider {
+        case .openRouter: openRouterKeyInput = value
+        case .bazaarlink: bazaarlinkKeyInput = value
+        }
+    }
+
+    private func setHasStoredKey(_ value: Bool, for provider: AIProvider) {
+        switch provider {
+        case .openRouter: hasOpenRouterKey = value
+        case .bazaarlink: hasBazaarlinkKey = value
+        }
+    }
+
+    private func setTestResult(_ value: String?, for provider: AIProvider) {
+        switch provider {
+        case .openRouter: openRouterTestResult = value
+        case .bazaarlink: bazaarlinkTestResult = value
+        }
+    }
+
+    private func setIsTesting(_ value: Bool, for provider: AIProvider) {
+        switch provider {
+        case .openRouter: isTestingOpenRouter = value
+        case .bazaarlink: isTestingBazaarlink = value
         }
     }
 
@@ -166,8 +216,8 @@ final class SettingsViewModel {
         preferencesStore.reset()
     }
 
-    /// Diagnostics for the most recent generation. Never includes the
-    /// OpenRouter key or Google tokens (they are never written there).
+    /// Diagnostics for the most recent generation. Never includes an AI
+    /// provider key or Google tokens (they are never written there).
     var diagnosticsJSON: String {
         environment.engine.lastDiagnosticsJSON ?? "{\n  \"note\": \"No generation has run yet.\"\n}"
     }

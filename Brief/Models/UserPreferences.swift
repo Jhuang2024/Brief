@@ -1,6 +1,42 @@
 import Foundation
 import SwiftUI
 
+/// A built-in AI provider Brief knows how to reach. Each has its own
+/// Keychain-stored key and fixed base URL, so both can be configured at
+/// once — generation tries `preferredProvider` first and automatically
+/// retries with the other one (if it has a saved key) on failure.
+enum AIProvider: String, Codable, CaseIterable, Identifiable {
+    case openRouter, bazaarlink
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .openRouter: return "OpenRouter"
+        case .bazaarlink: return "Bazaarlink"
+        }
+    }
+
+    var baseURL: URL {
+        switch self {
+        case .openRouter: return URL(string: "https://openrouter.ai/api/v1")!
+        case .bazaarlink: return URL(string: "https://bazaarlink.ai/api/v1")!
+        }
+    }
+
+    var keychainKind: KeychainService.APIKeyKind {
+        switch self {
+        case .openRouter: return .openRouter
+        case .bazaarlink: return .bazaarlink
+        }
+    }
+
+    /// The other built-in provider, tried as a fallback.
+    var fallback: AIProvider {
+        self == .openRouter ? .bazaarlink : .openRouter
+    }
+}
+
 enum BriefLength: String, Codable, CaseIterable, Identifiable {
     case quick, standard, thorough
     var id: String { rawValue }
@@ -153,22 +189,23 @@ struct UserPreferences: Codable, Equatable {
     var preferOfficialSources: Bool = true
     var requireMultipleSourcesForBreaking: Bool = true
 
-    // AI Provider — Bazaarlink by default, but any endpoint that speaks
-    // the OpenAI-style chat completions API can be used by changing the
-    // base URL. Structured JSON-schema output and the web-search plugin
-    // are OpenRouter-style extensions to that API that Bazaarlink also
-    // appears to use; disable either toggle in Settings if a provider
-    // doesn't support that exact request shape.
-    var apiBaseURL: String = "https://bazaarlink.ai/api/v1"
+    // AI Provider — both OpenRouter and Bazaarlink can hold a saved key
+    // at once. Generation tries preferredProvider first and automatically
+    // retries with the other one if it has a saved key and the first
+    // attempt fails. Structured JSON-schema output and the web-search
+    // plugin are OpenRouter-style request extensions that Bazaarlink also
+    // appears to support; disable either toggle in Settings if a request
+    // is being rejected because of them.
+    var preferredProvider: AIProvider = .openRouter
     var useStructuredOutput: Bool = true
     var useWebSearchPlugin: Bool = true
     // gpt-oss is OpenAI's open-weight GPT model (mid-2025) — the only
     // GPT-lineage model a router can realistically offer for free, since
     // OpenAI itself charges for GPT-4o/GPT-5-class access. ":free" is the
-    // OpenRouter-style suffix Bazaarlink also appears to use for its
+    // OpenRouter suffix convention Bazaarlink also appears to use for its
     // no-cost tier. Confirm with Settings -> AI Provider -> Test
     // Connection; deepseek/deepseek-chat-v3.1:free is a solid fallback if
-    // this slug doesn't match Bazaarlink's actual catalog.
+    // this slug doesn't match a provider's actual catalog.
     var researchModel: String = "openai/gpt-oss-120b:free"
     var editorModel: String = "openai/gpt-oss-120b:free"
     var researchDepth: ResearchDepth = .standard
@@ -193,17 +230,12 @@ struct UserPreferences: Codable, Equatable {
         )
     }
 
-    /// `apiBaseURL` with any trailing slash trimmed, so appending
-    /// "/chat/completions" never produces a doubled slash.
-    var resolvedAPIBaseURL: URL? {
-        let trimmed = apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        let withoutTrailingSlash = trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
-        guard let url = URL(string: withoutTrailingSlash),
-              let scheme = url.scheme?.lowercased(),
-              scheme == "https" || scheme == "http",
-              url.host != nil
-        else { return nil }
-        return url
+    /// `preferredProvider` first, then the other built-in provider —
+    /// only including ones that actually have a saved key.
+    var providerAttemptOrder: [AIProvider] {
+        [preferredProvider, preferredProvider.fallback].filter {
+            KeychainService.loadAPIKey($0.keychainKind) != nil
+        }
     }
 
     var enabledSections: [SectionConfiguration] {

@@ -1,10 +1,10 @@
 import Foundation
 
-/// Client for an OpenAI-style chat completions API. Defaults to
-/// OpenRouter, but the base URL, structured-output request shape, and
-/// web-search plugin are all configurable from Settings so any provider
-/// exposing a compatible `/chat/completions` endpoint can be used
-/// instead. Never logs the API key.
+/// Client for an OpenAI-style chat completions API. Each request is sent
+/// against an explicit base URL and API key resolved by the caller —
+/// BriefingEngine tries each configured provider (OpenRouter, Bazaarlink)
+/// in order and falls back automatically, so this type has no built-in
+/// notion of "the" provider. Never logs the API key.
 struct OpenRouterService {
     struct Citation: Hashable {
         var url: String
@@ -23,23 +23,23 @@ struct OpenRouterService {
 
     enum OpenRouterError: LocalizedError {
         case missingAPIKey
-        case invalidBaseURL
         case httpError(status: Int, message: String)
         case emptyResponse
         case invalidResponse
+        case allProvidersFailed(details: String)
 
         var errorDescription: String? {
             switch self {
             case .missingAPIKey:
-                return "Add your AI provider API key in Settings to generate a briefing."
-            case .invalidBaseURL:
-                return "The API base URL in Settings isn't a valid https:// address."
+                return "Add an OpenRouter or Bazaarlink API key in Settings to generate a briefing."
             case .httpError(let status, let message):
                 return "The AI provider request failed (HTTP \(status)). \(message)"
             case .emptyResponse:
                 return "The AI provider returned an empty response."
             case .invalidResponse:
                 return "The AI provider returned a response that could not be read."
+            case .allProvidersFailed(let details):
+                return "All configured AI providers failed. \(details)"
             }
         }
     }
@@ -55,6 +55,10 @@ struct OpenRouterService {
 
     /// Run one structured completion against `{baseURL}/chat/completions`.
     /// - Parameters:
+    ///   - apiKey: resolved by the caller — BriefingEngine tries each
+    ///     configured provider's key in order and falls back to the next
+    ///     one on failure, so this service has no opinion on which
+    ///     provider or key is "the" one to use.
     ///   - schema: strict JSON schema the response must match (a JSON object).
     ///   - useStructuredOutput: send `response_format`/`provider` fields.
     ///     Turn off in Settings if a provider rejects the OpenRouter-style
@@ -64,6 +68,7 @@ struct OpenRouterService {
     ///   - webResults: plugin max_results, configurable via research depth.
     func complete(
         baseURL: URL,
+        apiKey: String,
         model: String,
         systemPrompt: String,
         userPrompt: String,
@@ -74,10 +79,6 @@ struct OpenRouterService {
         webResults: Int = 10,
         temperature: Double = 0.3
     ) async throws -> CompletionResult {
-        guard let apiKey = KeychainService.loadAPIKey() else {
-            throw OpenRouterError.missingAPIKey
-        }
-
         var body: [String: Any] = [
             "model": model,
             "messages": [

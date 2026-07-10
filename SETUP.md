@@ -46,37 +46,41 @@ identifier is **not** required — it is an app-chosen string and stays
 
 ## 2. AI Provider
 
-Brief talks to whatever OpenAI-style `/chat/completions` endpoint you point
-it at. It currently defaults to **Bazaarlink** (`https://bazaarlink.ai/api/v1`),
-but **Settings → AI Provider** has an API Base URL field so any compatible
-provider works without a rebuild.
+Brief supports two built-in providers at once — **OpenRouter**
+(`https://openrouter.ai/api/v1`) and **Bazaarlink**
+(`https://bazaarlink.ai/api/v1`) — each with its own Keychain-stored key.
+Generation tries **Settings → AI Provider → Preferred provider** (default
+OpenRouter) first, and automatically retries with the other one if it has
+a saved key and the first attempt fails — "use whichever one works."
 
-1. Create an API key with your provider and make sure it has credit (or is
-   using a free tier).
+1. Create an API key with each provider you want configured (a single one
+   is enough to generate; a second is just automatic backup) and make sure
+   it has credit or is using a free tier.
 2. Build and run the app (Cmd-R) on your iPhone.
-3. In the app: **Settings → AI Provider**:
-   - **API Base URL** — defaults to `https://bazaarlink.ai/api/v1`. Change
-     this to switch providers (no trailing `/chat/completions`, no trailing
-     slash).
+3. In the app: **Settings → AI Provider**. Each provider has its own
+   section:
    - **API Key** — paste the key → **Save Key**. Stored in the iOS
-     Keychain, never in source or logs, and only ever sent to the base URL
-     above.
+     Keychain, never in source or logs, and only ever sent to that
+     provider's base URL.
    - **Test Connection** — sends one minimal completion request to confirm
-     the key and base URL work together.
+     that provider's key works.
+   - **Preferred provider**, at the top of the screen, picks which one is
+     tried first.
 4. **Structured JSON output** and **Web search plugin** toggles, further
    down the same screen, control OpenRouter-style extensions to the
-   request that Bazaarlink also appears to use:
+   request that Bazaarlink also appears to use, and apply to whichever
+   provider ends up handling a given request:
    - *Structured JSON output* sends a strict `response_format: json_schema`
      field so responses are guaranteed to match Brief's data model. Turn
-     this off only if your provider rejects that field outright — Brief
+     this off only if a provider rejects that field outright — Brief
      falls back to asking for JSON in plain language, which is less
      reliable but still generally decodable.
    - *Web search plugin* attaches OpenRouter's `plugins: [{id: "web"}]`
      block so research requests are grounded in live search results. If
-     your provider doesn't support this specific plugin syntax, turn it
-     off — research will then rely on the model's own knowledge instead of
+     a provider doesn't support this specific plugin syntax, turn it off
+     — research will then rely on the model's own knowledge instead of
      live web search, which will be noticeably less current.
-   - If you're not sure whether a new provider supports either extension,
+   - If you're not sure whether a provider supports either extension,
      leave both on and watch **Settings → Data → Export diagnostic JSON**
      after a generation attempt: HTTP errors there usually name the
      rejected field.
@@ -84,8 +88,9 @@ provider works without a rebuild.
    `openai/gpt-oss-120b:free` (OpenAI's open-weight GPT model, on the
    free tier), so generation costs nothing on providers that support the
    `:free` suffix convention. Run **Test Connection** after setup to
-   confirm Bazaarlink accepts that slug — if not, the DeepSeek `:free`
-   suggestions in that screen, or `auto:free`, are solid fallbacks.
+   confirm each configured provider accepts that slug — if not, the
+   DeepSeek `:free` suggestions in that screen, or `auto:free`, are solid
+   fallbacks.
 
 ---
 

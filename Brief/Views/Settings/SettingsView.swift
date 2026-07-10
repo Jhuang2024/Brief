@@ -37,6 +37,15 @@ struct SettingsView: View {
         }
     }
 
+    private var aiProviderSummary: String {
+        switch (viewModel.hasOpenRouterKey, viewModel.hasBazaarlinkKey) {
+        case (true, true): return "Both saved"
+        case (true, false): return "OpenRouter saved"
+        case (false, true): return "Bazaarlink saved"
+        case (false, false): return "Not set"
+        }
+    }
+
     private func rescheduleReminder() {
         Task {
             await environment.notificationService.updateMorningReminder(
@@ -51,11 +60,14 @@ struct SettingsView: View {
     private var connectionsSection: some View {
         Section {
             NavigationLink {
-                OpenRouterKeyView(viewModel: viewModel)
+                AIProviderView(viewModel: viewModel)
             } label: {
                 LabeledContent("AI Provider") {
-                    Text(viewModel.hasStoredKey ? "Saved" : "Not set")
-                        .foregroundStyle(viewModel.hasStoredKey ? Color.inkSecondary : Color.orange)
+                    Text(aiProviderSummary)
+                        .foregroundStyle(
+                            viewModel.hasOpenRouterKey || viewModel.hasBazaarlinkKey
+                                ? Color.inkSecondary : Color.orange
+                        )
                 }
             }
 
@@ -242,71 +254,30 @@ struct SettingsView: View {
     }
 }
 
-/// OpenRouter key entry and connection test. The stored key is never
-/// displayed back; it lives only in the Keychain.
-struct OpenRouterKeyView: View {
+/// Both providers can hold a saved key at once. Generation tries the
+/// preferred provider first and automatically retries with the other one
+/// if it has a saved key and the first attempt fails — "use whichever one
+/// works." Neither key is ever displayed back once saved; both live only
+/// in the Keychain.
+struct AIProviderView: View {
     @Bindable var viewModel: SettingsViewModel
 
     var body: some View {
         @Bindable var store = viewModel.preferencesStore
         Form {
             Section {
-                TextField("https://openrouter.ai/api/v1", text: $store.preferences.apiBaseURL)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .keyboardType(.URL)
-                    .font(.system(size: 15, design: .monospaced))
-            } header: {
-                FormSectionHeader(title: "API Base URL")
-            } footer: {
-                Text("Any provider exposing an OpenAI-style /chat/completions endpoint works here — OpenRouter by default, or point this at a different provider's base URL (no trailing /chat/completions, no trailing slash).")
-                    .foregroundStyle(Color.inkSecondary)
-            }
-
-            Section {
-                if viewModel.hasStoredKey {
-                    LabeledContent("Status", value: "Key saved in Keychain")
-                }
-                SecureField(
-                    viewModel.hasStoredKey ? "Replace key" : "Paste key",
-                    text: $viewModel.apiKeyInput
-                )
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                Button("Save Key") { viewModel.saveAPIKey() }
-                    .disabled(viewModel.apiKeyInput.trimmingCharacters(in: .whitespaces).isEmpty)
-                if viewModel.hasStoredKey {
-                    Button("Remove Key", role: .destructive) { viewModel.removeAPIKey() }
-                }
-            } header: {
-                FormSectionHeader(title: "API Key")
-            } footer: {
-                Text("Stored in the iOS Keychain, not in the app's files, and only ever sent to the base URL above.")
-                    .foregroundStyle(Color.inkSecondary)
-            }
-
-            Section {
-                Button {
-                    viewModel.testConnection()
-                } label: {
-                    HStack {
-                        Text("Test Connection")
-                        if viewModel.isTestingConnection {
-                            Spacer()
-                            ProgressView()
-                        }
+                Picker("Preferred provider", selection: $store.preferences.preferredProvider) {
+                    ForEach(AIProvider.allCases) { provider in
+                        Text(provider.displayName).tag(provider)
                     }
                 }
-                .disabled(!viewModel.hasStoredKey || viewModel.isTestingConnection)
-                if let result = viewModel.connectionTestResult {
-                    Text(result)
-                        .font(.footnote)
-                        .foregroundStyle(Color.inkSecondary)
-                }
             } footer: {
-                Text("Sends one minimal completion request to the base URL above to confirm the key and endpoint work.")
+                Text("Brief tries this provider first. If a request fails and the other provider has a saved key, it automatically retries there instead.")
                     .foregroundStyle(Color.inkSecondary)
             }
+
+            providerSection(.openRouter)
+            providerSection(.bazaarlink)
 
             Section {
                 Toggle("Structured JSON output", isOn: $store.preferences.useStructuredOutput)
@@ -314,13 +285,61 @@ struct OpenRouterKeyView: View {
             } header: {
                 FormSectionHeader(title: "Request Shape")
             } footer: {
-                Text("Both are OpenRouter-style extensions to the chat completions request. Turn either off if a different provider rejects the request — Brief falls back to asking for JSON in plain language when structured output is off, and research simply won't be web-grounded when the search plugin is off.")
+                Text("Both are OpenRouter-style extensions to the chat completions request that Bazaarlink also appears to support. Turn either off if a request is being rejected because of it — Brief falls back to asking for JSON in plain language when structured output is off, and research simply won't be web-grounded when the search plugin is off. Applies to whichever provider ends up handling the request.")
                     .foregroundStyle(Color.inkSecondary)
             }
         }
         .briefFormStyle()
         .navigationTitle("AI Provider")
         .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func providerSection(_ provider: AIProvider) -> some View {
+        Section {
+            if viewModel.hasStoredKey(for: provider) {
+                LabeledContent("Status", value: "Key saved in Keychain")
+            }
+            SecureField(
+                viewModel.hasStoredKey(for: provider) ? "Replace key" : "Paste key",
+                text: keyInputBinding(for: provider)
+            )
+            .autocorrectionDisabled()
+            .textInputAutocapitalization(.never)
+            Button("Save Key") { viewModel.saveKey(for: provider) }
+                .disabled(keyInputBinding(for: provider).wrappedValue.trimmingCharacters(in: .whitespaces).isEmpty)
+            if viewModel.hasStoredKey(for: provider) {
+                Button("Remove Key", role: .destructive) { viewModel.removeKey(for: provider) }
+            }
+            Button {
+                viewModel.testConnection(for: provider)
+            } label: {
+                HStack {
+                    Text("Test Connection")
+                    if viewModel.isTesting(for: provider) {
+                        Spacer()
+                        ProgressView()
+                    }
+                }
+            }
+            .disabled(!viewModel.hasStoredKey(for: provider) || viewModel.isTesting(for: provider))
+            if let result = viewModel.testResult(for: provider) {
+                Text(result)
+                    .font(.footnote)
+                    .foregroundStyle(Color.inkSecondary)
+            }
+        } header: {
+            FormSectionHeader(title: provider.displayName)
+        } footer: {
+            Text("\(provider.baseURL.absoluteString) — stored in the iOS Keychain, not in the app's files, and only ever sent to this provider.")
+                .foregroundStyle(Color.inkSecondary)
+        }
+    }
+
+    private func keyInputBinding(for provider: AIProvider) -> Binding<String> {
+        switch provider {
+        case .openRouter: return $viewModel.openRouterKeyInput
+        case .bazaarlink: return $viewModel.bazaarlinkKeyInput
+        }
     }
 }
 
