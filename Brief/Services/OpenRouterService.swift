@@ -97,10 +97,18 @@ struct OpenRouterService {
                     "schema": schema,
                 ],
             ]
-            // Fail cleanly instead of silently routing to a provider that
-            // cannot honour structured output. OpenRouter-specific; providers
-            // that ignore unknown fields are unaffected either way.
-            body["provider"] = ["require_parameters": true]
+            // Deliberately not setting provider.require_parameters here.
+            // That flag makes OpenRouter hard-reject any endpoint that
+            // can't fully honour every requested parameter — for
+            // free-tier/open-weight models, that often leaves zero
+            // qualifying endpoints and OpenRouter returns 404 "No
+            // endpoints found" instead of routing anywhere at all.
+            // Structured output is still requested and used when an
+            // endpoint honours it; decodeEditor/extractJSON already parse
+            // leniently (strip markdown fences, find the outermost JSON
+            // object) for the case where it's ignored, so degrading
+            // gracefully here is strictly better than a guaranteed
+            // failure to get any response at all.
         } else {
             // No enforced schema: ask for JSON in plain language instead.
             // The response is still parsed defensively (extractJSON strips
