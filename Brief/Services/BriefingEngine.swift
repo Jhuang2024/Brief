@@ -1,5 +1,6 @@
 import Foundation
 import SwiftData
+import UIKit
 
 /// Orchestrates the five-stage pipeline: local context → concurrent web
 /// research → editorial synthesis → validation → persistence.
@@ -41,6 +42,18 @@ final class BriefingEngine {
 
     private var generationTask: Task<DailyBrief?, Never>?
 
+    /// Keeps a generation running for a little while after the user
+    /// backgrounds the app (e.g. swiping up without force-quitting) —
+    /// without this, iOS suspends the process almost immediately and an
+    /// in-flight research/editor request just silently stops partway
+    /// through. iOS grants a limited window (historically on the order of
+    /// 30 seconds, not unlimited), not indefinite background execution;
+    /// the expiration handler cancels cooperatively so a run that outlives
+    /// the window fails cleanly instead of hanging, and picks back up
+    /// automatically next time the app is foregrounded since today's
+    /// brief is still missing or stale.
+    private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+
     private static let diagnosticsKey = "brief.lastGenerationDiagnostics"
 
     init(
@@ -74,15 +87,32 @@ final class BriefingEngine {
         if let task = generationTask {
             return await task.value
         }
+        beginBackgroundTask()
         let task = Task<DailyBrief?, Never> { [weak self] in
             await self?.run(trigger: trigger)
         }
         generationTask = task
-        return await task.value
+        let result = await task.value
+        endBackgroundTask()
+        return result
     }
 
     func cancelGeneration() {
         generationTask?.cancel()
+    }
+
+    private func beginBackgroundTask() {
+        guard backgroundTaskID == .invalid else { return }
+        backgroundTaskID = UIApplication.shared.beginBackgroundTask(withName: "Brief.generation") { [weak self] in
+            self?.generationTask?.cancel()
+            self?.endBackgroundTask()
+        }
+    }
+
+    private func endBackgroundTask() {
+        guard backgroundTaskID != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(backgroundTaskID)
+        backgroundTaskID = .invalid
     }
 
     var lastDiagnosticsJSON: String? {

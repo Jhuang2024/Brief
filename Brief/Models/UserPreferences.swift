@@ -153,20 +153,25 @@ struct UserPreferences: Codable, Equatable {
     var preferOfficialSources: Bool = true
     var requireMultipleSourcesForBreaking: Bool = true
 
-    // AI Provider — defaults to OpenRouter, but any endpoint that speaks
+    // AI Provider — Bazaarlink by default, but any endpoint that speaks
     // the OpenAI-style chat completions API can be used by changing the
     // base URL. Structured JSON-schema output and the web-search plugin
-    // are OpenRouter extensions to that API; disable either toggle if a
-    // different provider doesn't support that exact request shape.
-    var apiBaseURL: String = "https://openrouter.ai/api/v1"
+    // are OpenRouter-style extensions to that API that Bazaarlink also
+    // appears to use; disable either toggle in Settings if a provider
+    // doesn't support that exact request shape.
+    var apiBaseURL: String = "https://bazaarlink.ai/api/v1"
     var useStructuredOutput: Bool = true
     var useWebSearchPlugin: Bool = true
-    // "auto:free" routes to free-tier models only, so research + editorial
-    // generation cost nothing on providers (e.g. Bazaarlink) that support
-    // this convention. Change in Settings -> Models if that ever isn't
-    // what's wanted.
-    var researchModel: String = "auto:free"
-    var editorModel: String = "auto:free"
+    // OpenAI's GPT-lineage model with a genuinely free tier is gpt-oss
+    // (open-weight, released mid-2025) — proprietary GPT-4o/GPT-5 class
+    // models aren't offered for free by routers since OpenAI itself
+    // charges for them. ":free" is the OpenRouter-style suffix Bazaarlink
+    // also appears to use for its no-cost tier. This slug is an informed
+    // guess, not a verified Bazaarlink catalog entry — confirm it with
+    // Settings -> AI Provider -> Test Connection, and change it there if
+    // Bazaarlink names it differently.
+    var researchModel: String = "openai/gpt-oss-120b:free"
+    var editorModel: String = "openai/gpt-oss-120b:free"
     var researchDepth: ResearchDepth = .standard
 
     // Weather & location

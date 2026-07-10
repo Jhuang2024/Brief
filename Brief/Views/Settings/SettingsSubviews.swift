@@ -160,6 +160,8 @@ struct ModelsSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 
     private static let suggestedModels = [
+        "openai/gpt-oss-120b:free",
+        "openai/gpt-oss-20b:free",
         "auto:free",
         "openrouter/auto",
         "anthropic/claude-sonnet-4.5",
@@ -174,7 +176,7 @@ struct ModelsSettingsView: View {
             Section {
                 modelField(title: "Research model", text: $store.preferences.researchModel)
             } footer: {
-                Text("Used for the web-grounded research requests. Defaults to auto:free, which routes to free-tier models only on providers that support that convention. Most other suggestions below are OpenRouter's model-slug format (provider/model) — if you've changed the API base URL in AI Provider settings, use whatever slug that provider expects instead.")
+                Text("Used for the web-grounded research requests. Defaults to openai/gpt-oss-120b:free — OpenAI's open-weight GPT model on Bazaarlink's free tier. If that slug doesn't match Bazaarlink's actual catalog, Settings -> AI Provider -> Test Connection will show the rejection; try auto:free or another suggestion below instead. Suggestions follow OpenRouter's model-slug format (provider/model) — if you've changed the API base URL, use whatever slug that provider expects instead.")
                     .foregroundStyle(Color.inkSecondary)
             }
             Section {

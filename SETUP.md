@@ -47,14 +47,15 @@ identifier is **not** required — it is an app-chosen string and stays
 ## 2. AI Provider
 
 Brief talks to whatever OpenAI-style `/chat/completions` endpoint you point
-it at — OpenRouter by default, but **Settings → AI Provider** has an API
-Base URL field so any compatible provider works without a rebuild.
+it at. It currently defaults to **Bazaarlink** (`https://bazaarlink.ai/api/v1`),
+but **Settings → AI Provider** has an API Base URL field so any compatible
+provider works without a rebuild.
 
-1. Create an API key with your provider (OpenRouter: <https://openrouter.ai/keys>)
-   and make sure it has credit.
+1. Create an API key with your provider and make sure it has credit (or is
+   using a free tier).
 2. Build and run the app (Cmd-R) on your iPhone.
 3. In the app: **Settings → AI Provider**:
-   - **API Base URL** — defaults to `https://openrouter.ai/api/v1`. Change
+   - **API Base URL** — defaults to `https://bazaarlink.ai/api/v1`. Change
      this to switch providers (no trailing `/chat/completions`, no trailing
      slash).
    - **API Key** — paste the key → **Save Key**. Stored in the iOS
@@ -63,8 +64,8 @@ Base URL field so any compatible provider works without a rebuild.
    - **Test Connection** — sends one minimal completion request to confirm
      the key and base URL work together.
 4. **Structured JSON output** and **Web search plugin** toggles, further
-   down the same screen, control OpenRouter-specific extensions to the
-   request:
+   down the same screen, control OpenRouter-style extensions to the
+   request that Bazaarlink also appears to use:
    - *Structured JSON output* sends a strict `response_format: json_schema`
      field so responses are guaranteed to match Brief's data model. Turn
      this off only if your provider rejects that field outright — Brief
@@ -79,10 +80,13 @@ Base URL field so any compatible provider works without a rebuild.
      leave both on and watch **Settings → Data → Export diagnostic JSON**
      after a generation attempt: HTTP errors there usually name the
      rejected field.
-5. Optional: **Settings → Models** to change the research model, editor
-   model (default `auto:free`, which routes to free-tier models only on
-   providers that support that convention; any provider-specific slug is
-   accepted) or research depth.
+5. **Settings → Models** — research and editor models both default to
+   `openai/gpt-oss-120b:free`: OpenAI's open-weight GPT model (gpt-oss),
+   on the free tier, following the same `:free` suffix convention
+   OpenRouter uses. This slug is an informed guess about Bazaarlink's
+   catalog, not a verified one — run **Test Connection** after setup, and
+   if it's rejected, try `auto:free` or check Bazaarlink's own model list
+   for the exact free-tier slug.
 
 ---
 

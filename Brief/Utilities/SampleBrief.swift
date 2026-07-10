@@ -168,7 +168,7 @@ enum SampleBrief {
             weather: weather,
             estimatedReadingMinutes: 5,
             status: .complete,
-            researchModel: "auto:free",
+            researchModel: "openai/gpt-oss-120b:free",
             editorModel: "sample/editor",
             inputTokens: 18_400,
             outputTokens: 4_200,
