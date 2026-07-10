@@ -153,7 +153,14 @@ struct UserPreferences: Codable, Equatable {
     var preferOfficialSources: Bool = true
     var requireMultipleSourcesForBreaking: Bool = true
 
-    // Models
+    // AI Provider — defaults to OpenRouter, but any endpoint that speaks
+    // the OpenAI-style chat completions API can be used by changing the
+    // base URL. Structured JSON-schema output and the web-search plugin
+    // are OpenRouter extensions to that API; disable either toggle if a
+    // different provider doesn't support that exact request shape.
+    var apiBaseURL: String = "https://openrouter.ai/api/v1"
+    var useStructuredOutput: Bool = true
+    var useWebSearchPlugin: Bool = true
     var researchModel: String = "openrouter/auto"
     var editorModel: String = "openrouter/auto"
     var researchDepth: ResearchDepth = .standard
@@ -176,6 +183,19 @@ struct UserPreferences: Codable, Equatable {
             hour: morningMinutesAfterMidnight / 60,
             minute: morningMinutesAfterMidnight % 60
         )
+    }
+
+    /// `apiBaseURL` with any trailing slash trimmed, so appending
+    /// "/chat/completions" never produces a doubled slash.
+    var resolvedAPIBaseURL: URL? {
+        let trimmed = apiBaseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        let withoutTrailingSlash = trimmed.hasSuffix("/") ? String(trimmed.dropLast()) : trimmed
+        guard let url = URL(string: withoutTrailingSlash),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https" || scheme == "http",
+              url.host != nil
+        else { return nil }
+        return url
     }
 
     var enabledSections: [SectionConfiguration] {
@@ -241,7 +261,7 @@ final class PreferencesStore {
 
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.key),
-           let decoded = try? JSONDecoder().decode(UserPreferences.self, from: data) {
+           let decoded = Self.decodeFillingMissingKeysWithDefaults(data) {
             preferences = decoded
         } else {
             preferences = .default
@@ -256,5 +276,31 @@ final class PreferencesStore {
 
     func reset() {
         preferences = .default
+    }
+
+    /// Plain `Codable` synthesis does not apply a stored property's
+    /// default value to a key missing from the decoded JSON — it just
+    /// fails to decode. Since every new preference added over time is a
+    /// non-optional field with a default, decoding an older saved blob
+    /// as-is would throw, and the `try?` in `init()` would silently
+    /// discard everything already saved (interests, sources, calendar
+    /// selection, …) in favor of `.default`. Instead, merge any keys
+    /// missing from the saved JSON in from a freshly encoded `.default`
+    /// before decoding, so old saved preferences stay intact across
+    /// schema additions.
+    private static func decodeFillingMissingKeysWithDefaults(_ data: Data) -> UserPreferences? {
+        guard var stored = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any],
+              let defaultData = try? JSONEncoder().encode(UserPreferences.default),
+              let defaults = (try? JSONSerialization.jsonObject(with: defaultData)) as? [String: Any]
+        else {
+            return try? JSONDecoder().decode(UserPreferences.self, from: data)
+        }
+        for (key, value) in defaults where stored[key] == nil {
+            stored[key] = value
+        }
+        guard let mergedData = try? JSONSerialization.data(withJSONObject: stored) else {
+            return try? JSONDecoder().decode(UserPreferences.self, from: data)
+        }
+        return try? JSONDecoder().decode(UserPreferences.self, from: mergedData)
     }
 }

@@ -1,8 +1,10 @@
 import Foundation
 
-/// Direct client for the OpenRouter chat completions API.
-/// Requests use strict JSON-schema structured output and, when asked,
-/// the OpenRouter web-search plugin. Never logs the API key.
+/// Client for an OpenAI-style chat completions API. Defaults to
+/// OpenRouter, but the base URL, structured-output request shape, and
+/// web-search plugin are all configurable from Settings so any provider
+/// exposing a compatible `/chat/completions` endpoint can be used
+/// instead. Never logs the API key.
 struct OpenRouterService {
     struct Citation: Hashable {
         var url: String
@@ -21,6 +23,7 @@ struct OpenRouterService {
 
     enum OpenRouterError: LocalizedError {
         case missingAPIKey
+        case invalidBaseURL
         case httpError(status: Int, message: String)
         case emptyResponse
         case invalidResponse
@@ -28,19 +31,18 @@ struct OpenRouterService {
         var errorDescription: String? {
             switch self {
             case .missingAPIKey:
-                return "Add your OpenRouter API key in Settings to generate a briefing."
+                return "Add your AI provider API key in Settings to generate a briefing."
+            case .invalidBaseURL:
+                return "The API base URL in Settings isn't a valid https:// address."
             case .httpError(let status, let message):
-                return "OpenRouter request failed (HTTP \(status)). \(message)"
+                return "The AI provider request failed (HTTP \(status)). \(message)"
             case .emptyResponse:
-                return "OpenRouter returned an empty response."
+                return "The AI provider returned an empty response."
             case .invalidResponse:
-                return "OpenRouter returned a response that could not be read."
+                return "The AI provider returned a response that could not be read."
             }
         }
     }
-
-    private static let endpoint = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
-    private static let keyEndpoint = URL(string: "https://openrouter.ai/api/v1/key")!
 
     private let session: URLSession
 
@@ -51,17 +53,23 @@ struct OpenRouterService {
         session = URLSession(configuration: configuration)
     }
 
-    /// Run one structured completion.
+    /// Run one structured completion against `{baseURL}/chat/completions`.
     /// - Parameters:
     ///   - schema: strict JSON schema the response must match (a JSON object).
-    ///   - webSearch: attach the OpenRouter web plugin.
+    ///   - useStructuredOutput: send `response_format`/`provider` fields.
+    ///     Turn off in Settings if a provider rejects the OpenRouter-style
+    ///     strict json_schema request shape.
+    ///   - webSearch: attach the OpenRouter-style web plugin, when enabled
+    ///     in Settings.
     ///   - webResults: plugin max_results, configurable via research depth.
     func complete(
+        baseURL: URL,
         model: String,
         systemPrompt: String,
         userPrompt: String,
         schemaName: String,
         schema: [String: Any],
+        useStructuredOutput: Bool,
         webSearch: Bool,
         webResults: Int = 10,
         temperature: Double = 0.3
@@ -77,26 +85,35 @@ struct OpenRouterService {
                 ["role": "user", "content": userPrompt],
             ],
             "temperature": temperature,
-            "response_format": [
+            "usage": ["include": true],
+        ]
+        if useStructuredOutput {
+            body["response_format"] = [
                 "type": "json_schema",
                 "json_schema": [
                     "name": schemaName,
                     "strict": true,
                     "schema": schema,
                 ],
-            ],
+            ]
             // Fail cleanly instead of silently routing to a provider that
-            // cannot honour structured output.
-            "provider": [
-                "require_parameters": true,
-            ],
-            "usage": ["include": true],
-        ]
+            // cannot honour structured output. OpenRouter-specific; providers
+            // that ignore unknown fields are unaffected either way.
+            body["provider"] = ["require_parameters": true]
+        } else {
+            // No enforced schema: ask for JSON in plain language instead.
+            // The response is still parsed defensively (extractJSON strips
+            // prose/markdown fences around the outermost JSON object).
+            body["messages"] = [
+                ["role": "system", "content": systemPrompt + "\n\nRespond with ONLY a single JSON object matching this schema, no prose, no markdown fences:\n" + Self.jsonString(schema)],
+                ["role": "user", "content": userPrompt],
+            ]
+        }
         if webSearch {
             body["plugins"] = [["id": "web", "max_results": webResults]]
         }
 
-        var request = URLRequest(url: Self.endpoint)
+        var request = URLRequest(url: baseURL.appendingPathComponent("chat/completions"))
         request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -142,11 +159,24 @@ struct OpenRouterService {
         )
     }
 
-    /// Validate an API key against the OpenRouter key endpoint.
-    /// Returns a short human-readable description of the key.
-    func testConnection(apiKey: String) async throws -> String {
-        var request = URLRequest(url: Self.keyEndpoint)
+    /// Validates a key by sending one minimal chat completion — this works
+    /// against any OpenAI-style provider, unlike OpenRouter's proprietary
+    /// `/key` introspection endpoint. Returns a short human-readable result.
+    func testConnection(baseURL: URL, apiKey: String, model: String) async throws -> String {
+        var request = URLRequest(url: baseURL.appendingPathComponent("chat/completions"))
+        request.httpMethod = "POST"
         request.setValue("Bearer \(apiKey.trimmingCharacters(in: .whitespacesAndNewlines))", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Brief", forHTTPHeaderField: "X-Title")
+        let body: [String: Any] = [
+            "model": model,
+            "messages": [
+                ["role": "user", "content": "Reply with the single word OK."],
+            ],
+            "max_tokens": 5,
+        ]
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
         let (data, response) = try await session.data(for: request)
         guard let http = response as? HTTPURLResponse else {
             throw OpenRouterError.invalidResponse
@@ -157,15 +187,19 @@ struct OpenRouterService {
                 message: http.statusCode == 401 ? "The key was rejected." : Self.errorMessage(from: data)
             )
         }
-        if let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-           let info = object["data"] as? [String: Any] {
-            let label = info["label"] as? String ?? "key"
-            if let usage = info["usage"] as? Double {
-                return "Connected — \(label), $\(String(format: "%.2f", usage)) used."
-            }
-            return "Connected — \(label)."
+        guard let decoded = try? JSONDecoder().decode(ChatResponse.self, from: data),
+              decoded.choices.first?.message.content != nil
+        else {
+            throw OpenRouterError.invalidResponse
         }
-        return "Connected."
+        return "Connected — \(decoded.model ?? model) responded."
+    }
+
+    private static func jsonString(_ object: Any) -> String {
+        guard JSONSerialization.isValidJSONObject(object),
+              let data = try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
+        else { return "{}" }
+        return String(decoding: data, as: UTF8.self)
     }
 
     private static func errorMessage(from data: Data) -> String {

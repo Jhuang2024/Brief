@@ -53,11 +53,17 @@ final class SettingsViewModel {
             connectionTestResult = "No API key saved yet."
             return
         }
+        guard let baseURL = preferencesStore.preferences.resolvedAPIBaseURL else {
+            connectionTestResult = OpenRouterService.OpenRouterError.invalidBaseURL.errorDescription
+            return
+        }
         isTestingConnection = true
         connectionTestResult = nil
+        let model = preferencesStore.preferences.editorModel
         Task {
             do {
-                connectionTestResult = try await OpenRouterService().testConnection(apiKey: key)
+                connectionTestResult = try await OpenRouterService()
+                    .testConnection(baseURL: baseURL, apiKey: key, model: model)
             } catch {
                 connectionTestResult = error.localizedDescription
             }

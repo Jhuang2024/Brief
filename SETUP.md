@@ -44,16 +44,44 @@ identifier is **not** required — it is an app-chosen string and stays
 
 ---
 
-## 2. OpenRouter
+## 2. AI Provider
 
-1. Create an API key at <https://openrouter.ai/keys> and add a few dollars of
-   credit.
+Brief talks to whatever OpenAI-style `/chat/completions` endpoint you point
+it at — OpenRouter by default, but **Settings → AI Provider** has an API
+Base URL field so any compatible provider works without a rebuild.
+
+1. Create an API key with your provider (OpenRouter: <https://openrouter.ai/keys>)
+   and make sure it has credit.
 2. Build and run the app (Cmd-R) on your iPhone.
-3. In the app: **Settings → OpenRouter API Key** → paste the key → **Save
-   Key**. The key is stored in the iOS Keychain, never in source or logs.
-4. Tap **Test Connection** — you should see "Connected".
-5. Optional: **Settings → Models** to change the research model, editor model
-   (default `openrouter/auto`, any custom slug accepted) or research depth.
+3. In the app: **Settings → AI Provider**:
+   - **API Base URL** — defaults to `https://openrouter.ai/api/v1`. Change
+     this to switch providers (no trailing `/chat/completions`, no trailing
+     slash).
+   - **API Key** — paste the key → **Save Key**. Stored in the iOS
+     Keychain, never in source or logs, and only ever sent to the base URL
+     above.
+   - **Test Connection** — sends one minimal completion request to confirm
+     the key and base URL work together.
+4. **Structured JSON output** and **Web search plugin** toggles, further
+   down the same screen, control OpenRouter-specific extensions to the
+   request:
+   - *Structured JSON output* sends a strict `response_format: json_schema`
+     field so responses are guaranteed to match Brief's data model. Turn
+     this off only if your provider rejects that field outright — Brief
+     falls back to asking for JSON in plain language, which is less
+     reliable but still generally decodable.
+   - *Web search plugin* attaches OpenRouter's `plugins: [{id: "web"}]`
+     block so research requests are grounded in live search results. If
+     your provider doesn't support this specific plugin syntax, turn it
+     off — research will then rely on the model's own knowledge instead of
+     live web search, which will be noticeably less current.
+   - If you're not sure whether a new provider supports either extension,
+     leave both on and watch **Settings → Data → Export diagnostic JSON**
+     after a generation attempt: HTTP errors there usually name the
+     rejected field.
+5. Optional: **Settings → Models** to change the research model, editor
+   model (default `openrouter/auto`, any provider-specific slug accepted)
+   or research depth.
 
 ---
 

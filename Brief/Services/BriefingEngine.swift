@@ -101,10 +101,14 @@ final class BriefingEngine {
             lastError = OpenRouterService.OpenRouterError.missingAPIKey.errorDescription
             return nil
         }
+        let preferences = preferencesStore.preferences
+        guard let apiBaseURL = preferences.resolvedAPIBaseURL else {
+            lastError = OpenRouterService.OpenRouterError.invalidBaseURL.errorDescription
+            return nil
+        }
 
         isGenerating = true
         lastError = nil
-        let preferences = preferencesStore.preferences
         setUpPhases(preferences: preferences)
 
         var diagnostics = GenerationDiagnostics(
@@ -153,7 +157,7 @@ final class BriefingEngine {
                 taskGroup.addTask {
                     do {
                         let packet = try await Self.runResearch(
-                            group: group, context: context, openRouter: openRouter
+                            group: group, context: context, openRouter: openRouter, baseURL: apiBaseURL
                         )
                         return (group, .success(packet))
                     } catch {
@@ -208,6 +212,7 @@ final class BriefingEngine {
                 packets: packets,
                 failedGroups: failedGroups,
                 preferences: preferences,
+                baseURL: apiBaseURL,
                 diagnostics: &diagnostics
             )
             markPhase("editing", .done)
@@ -359,16 +364,19 @@ final class BriefingEngine {
     private nonisolated static func runResearch(
         group: ResearchGroup,
         context: BriefContext,
-        openRouter: OpenRouterService
+        openRouter: OpenRouterService,
+        baseURL: URL
     ) async throws -> ResearchPacket {
         let preferences = context.preferences
         let result = try await openRouter.complete(
+            baseURL: baseURL,
             model: preferences.researchModel,
             systemPrompt: BriefingPrompts.researchSystemPrompt,
             userPrompt: BriefingPrompts.researchUserPrompt(group: group, context: context),
             schemaName: "research_candidates",
             schema: BriefingPrompts.researchSchema,
-            webSearch: true,
+            useStructuredOutput: preferences.useStructuredOutput,
+            webSearch: preferences.useWebSearchPlugin,
             webResults: preferences.researchDepth.webResults,
             temperature: 0.3
         )
@@ -412,9 +420,11 @@ final class BriefingEngine {
         packets: [ResearchPacket],
         failedGroups: [ResearchGroup],
         preferences: UserPreferences,
+        baseURL: URL,
         diagnostics: inout GenerationDiagnostics
     ) async throws -> (response: EditorResponse, modelUsed: String) {
         let result = try await openRouter.complete(
+            baseURL: baseURL,
             model: preferences.editorModel,
             systemPrompt: BriefingPrompts.editorSystemPrompt,
             userPrompt: BriefingPrompts.editorUserPrompt(
@@ -422,6 +432,7 @@ final class BriefingEngine {
             ),
             schemaName: "daily_brief",
             schema: BriefingPrompts.editorSchema,
+            useStructuredOutput: preferences.useStructuredOutput,
             webSearch: false,
             temperature: 0.2
         )
@@ -439,6 +450,7 @@ final class BriefingEngine {
             // One repair attempt: send the broken output and the error back.
             diagnostics.errors.append("Editor output failed to decode: \(error.localizedDescription). Attempting repair.")
             let repair = try await openRouter.complete(
+                baseURL: baseURL,
                 model: preferences.editorModel,
                 systemPrompt: BriefingPrompts.editorSystemPrompt,
                 userPrompt: BriefingPrompts.repairPrompt(
@@ -447,6 +459,7 @@ final class BriefingEngine {
                 ),
                 schemaName: "daily_brief",
                 schema: BriefingPrompts.editorSchema,
+                useStructuredOutput: preferences.useStructuredOutput,
                 webSearch: false,
                 temperature: 0.0
             )

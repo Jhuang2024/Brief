@@ -53,7 +53,7 @@ struct SettingsView: View {
             NavigationLink {
                 OpenRouterKeyView(viewModel: viewModel)
             } label: {
-                LabeledContent("OpenRouter API Key") {
+                LabeledContent("AI Provider") {
                     Text(viewModel.hasStoredKey ? "Saved" : "Not set")
                         .foregroundStyle(viewModel.hasStoredKey ? Color.inkSecondary : Color.orange)
                 }
@@ -246,13 +246,27 @@ struct OpenRouterKeyView: View {
     @Bindable var viewModel: SettingsViewModel
 
     var body: some View {
+        @Bindable var store = viewModel.preferencesStore
         Form {
+            Section {
+                TextField("https://openrouter.ai/api/v1", text: $store.preferences.apiBaseURL)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.URL)
+                    .font(.system(size: 15, design: .monospaced))
+            } header: {
+                FormSectionHeader(title: "API Base URL")
+            } footer: {
+                Text("Any provider exposing an OpenAI-style /chat/completions endpoint works here — OpenRouter by default, or point this at a different provider's base URL (no trailing /chat/completions, no trailing slash).")
+                    .foregroundStyle(Color.inkSecondary)
+            }
+
             Section {
                 if viewModel.hasStoredKey {
                     LabeledContent("Status", value: "Key saved in Keychain")
                 }
                 SecureField(
-                    viewModel.hasStoredKey ? "Replace key (sk-or-…)" : "Paste key (sk-or-…)",
+                    viewModel.hasStoredKey ? "Replace key" : "Paste key",
                     text: $viewModel.apiKeyInput
                 )
                 .autocorrectionDisabled()
@@ -263,9 +277,9 @@ struct OpenRouterKeyView: View {
                     Button("Remove Key", role: .destructive) { viewModel.removeAPIKey() }
                 }
             } header: {
-                FormSectionHeader(title: "OpenRouter API Key")
+                FormSectionHeader(title: "API Key")
             } footer: {
-                Text("Create a key at openrouter.ai → Keys. It is stored in the iOS Keychain, not in the app's files, and is only sent to openrouter.ai.")
+                Text("Stored in the iOS Keychain, not in the app's files, and only ever sent to the base URL above.")
                     .foregroundStyle(Color.inkSecondary)
             }
 
@@ -287,10 +301,23 @@ struct OpenRouterKeyView: View {
                         .font(.footnote)
                         .foregroundStyle(Color.inkSecondary)
                 }
+            } footer: {
+                Text("Sends one minimal completion request to the base URL above to confirm the key and endpoint work.")
+                    .foregroundStyle(Color.inkSecondary)
+            }
+
+            Section {
+                Toggle("Structured JSON output", isOn: $store.preferences.useStructuredOutput)
+                Toggle("Web search plugin", isOn: $store.preferences.useWebSearchPlugin)
+            } header: {
+                FormSectionHeader(title: "Request Shape")
+            } footer: {
+                Text("Both are OpenRouter-style extensions to the chat completions request. Turn either off if a different provider rejects the request — Brief falls back to asking for JSON in plain language when structured output is off, and research simply won't be web-grounded when the search plugin is off.")
+                    .foregroundStyle(Color.inkSecondary)
             }
         }
         .briefFormStyle()
-        .navigationTitle("OpenRouter")
+        .navigationTitle("AI Provider")
         .navigationBarTitleDisplayMode(.inline)
     }
 }

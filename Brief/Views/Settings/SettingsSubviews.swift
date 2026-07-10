@@ -173,7 +173,7 @@ struct ModelsSettingsView: View {
             Section {
                 modelField(title: "Research model", text: $store.preferences.researchModel)
             } footer: {
-                Text("Used for the web-grounded research requests. Any OpenRouter model slug works; openrouter/auto lets OpenRouter choose.")
+                Text("Used for the web-grounded research requests. The suggestions below are OpenRouter's model-slug format (provider/model) — if you've changed the API base URL in AI Provider settings, use whatever slug that provider expects instead.")
                     .foregroundStyle(Color.inkSecondary)
             }
             Section {

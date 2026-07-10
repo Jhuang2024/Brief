@@ -161,7 +161,7 @@ struct TodayView: View {
             RestrainedEmptyState(
                 symbolName: "key",
                 title: "One thing before your first brief",
-                message: "Add your OpenRouter API key in Settings to generate a briefing."
+                message: "Add your AI provider API key in Settings to generate a briefing."
             )
             Button {
                 viewModel.openSettings()
