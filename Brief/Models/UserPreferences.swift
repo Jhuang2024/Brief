@@ -203,15 +203,19 @@ struct UserPreferences: Codable, Equatable {
     var preferredProvider: AIProvider = .openRouter
     var useStructuredOutput: Bool = true
     var useWebSearchPlugin: Bool = true
-    // "auto:free" rather than a pinned model: confirmed in testing that
+    // "openai:free" rather than a pinned model: confirmed in testing that
     // openai/gpt-oss-120b:free alone gets upstream-rate-limited under
     // real-world demand ("temporarily rate-limited upstream" from
     // OpenRouter's OpenInference-hosted pool) — a specific popular free
     // model being oversubscribed, not an account or request problem.
-    // auto:free lets OpenRouter route to whichever free model currently
-    // has capacity instead of pinning to one that may be saturated.
-    var researchModel: String = "auto:free"
-    var editorModel: String = "auto:free"
+    // "openai:free" is a Brief-specific sentinel (see
+    // OpenRouterService.modelFamilyFallbacks) that falls back between
+    // OpenAI's own free/open-weight models (gpt-oss-120b, then
+    // gpt-oss-20b) instead of pinning to one that may be saturated —
+    // unlike OpenRouter's own "auto:free"/"auto" routing, which is free
+    // to land on an unrelated provider such as DeepSeek.
+    var researchModel: String = "openai:free"
+    var editorModel: String = "openai:free"
     var researchDepth: ResearchDepth = .standard
 
     // Weather & location
@@ -320,23 +324,32 @@ final class PreferencesStore {
         }
     }
 
-    /// One-time migration for a specific default that turned out to be a
-    /// bad choice after already shipping: openai/gpt-oss-120b:free gets
-    /// upstream-rate-limited under real demand (confirmed in testing),
-    /// but changing UserPreferences.default only affects fresh installs
-    /// — a phone that already saved that value keeps using it forever
-    /// otherwise, since nothing here ever rewrites an already-saved
-    /// preference. This only touches an exact match of that specific
-    /// stale value, never a value the user deliberately chose themselves,
-    /// so it can't clobber an intentional customization.
+    /// One-time migration for defaults that turned out to be a bad choice
+    /// after already shipping — changing UserPreferences.default only
+    /// affects fresh installs, so a phone that already saved an old
+    /// default keeps using it forever otherwise, since nothing here ever
+    /// rewrites an already-saved preference on its own. This only touches
+    /// an exact match of a specific historical stale value, never a value
+    /// the user deliberately chose themselves, so it can't clobber an
+    /// intentional customization.
+    ///
+    /// - `openai/gpt-oss-120b:free`: gets upstream-rate-limited under real
+    ///   demand (confirmed in testing) when pinned alone.
+    /// - `auto:free`: OpenRouter's own "route to any free model" auto
+    ///   selection, which is free to land on an unrelated provider such as
+    ///   DeepSeek — confirmed in testing landing on
+    ///   deepseek/deepseek-v4-flash, not what "free" was meant to mean here.
+    ///
+    /// Both migrate straight to `openai:free`, Brief's own sentinel that
+    /// falls back only between OpenAI's free/open-weight models.
     private static func migratingKnownStaleModelDefaults(_ preferences: UserPreferences) -> UserPreferences {
         var preferences = preferences
-        let staleDefault = "openai/gpt-oss-120b:free"
-        if preferences.researchModel == staleDefault {
-            preferences.researchModel = "auto:free"
+        let staleDefaults: Set<String> = ["openai/gpt-oss-120b:free", "auto:free"]
+        if staleDefaults.contains(preferences.researchModel) {
+            preferences.researchModel = "openai:free"
         }
-        if preferences.editorModel == staleDefault {
-            preferences.editorModel = "auto:free"
+        if staleDefaults.contains(preferences.editorModel) {
+            preferences.editorModel = "openai:free"
         }
         return preferences
     }

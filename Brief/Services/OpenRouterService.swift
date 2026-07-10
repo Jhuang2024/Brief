@@ -44,6 +44,17 @@ struct OpenRouterService {
         }
     }
 
+    /// Model-family sentinels recognized in place of a single pinned model
+    /// slug in `UserPreferences.researchModel`/`editorModel`. Sent to
+    /// OpenRouter as its `models` fallback array (tried in order) instead
+    /// of a single `model`, so generation stays within one named company's
+    /// models without pinning to whichever one happens to be first.
+    /// `openai:free` is currently the only OpenAI-published free/open-weight
+    /// pair on OpenRouter; add more slugs here if OpenAI ships another one.
+    private static let modelFamilyFallbacks: [String: [String]] = [
+        "openai:free": ["openai/gpt-oss-120b:free", "openai/gpt-oss-20b:free"],
+    ]
+
     private let session: URLSession
 
     init() {
@@ -84,7 +95,6 @@ struct OpenRouterService {
         maxTokens: Int? = nil
     ) async throws -> CompletionResult {
         var body: [String: Any] = [
-            "model": model,
             "messages": [
                 ["role": "system", "content": systemPrompt],
                 ["role": "user", "content": userPrompt],
@@ -92,6 +102,20 @@ struct OpenRouterService {
             "temperature": temperature,
             "usage": ["include": true],
         ]
+        if let familyFallbacks = Self.modelFamilyFallbacks[model] {
+            // A named family (e.g. "openai:free") rather than one pinned
+            // slug: send OpenRouter's own fallback-list field so it stays
+            // within that one company's models — trying the larger one
+            // first, falling back to the smaller one only if it's
+            // unavailable — instead of either pinning to a single free
+            // model (which risks upstream rate-limiting when that one
+            // model is oversubscribed) or using OpenRouter's own "auto"
+            // routing, which is free to pick an unrelated provider like
+            // DeepSeek.
+            body["models"] = familyFallbacks
+        } else {
+            body["model"] = model
+        }
         if let maxTokens {
             body["max_tokens"] = maxTokens
         }
@@ -181,13 +205,17 @@ struct OpenRouterService {
         request.setValue("Bearer \(apiKey.trimmingCharacters(in: .whitespacesAndNewlines))", forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Brief", forHTTPHeaderField: "X-Title")
-        let body: [String: Any] = [
-            "model": model,
+        var body: [String: Any] = [
             "messages": [
                 ["role": "user", "content": "Reply with the single word OK."],
             ],
             "max_tokens": 5,
         ]
+        if let familyFallbacks = Self.modelFamilyFallbacks[model] {
+            body["models"] = familyFallbacks
+        } else {
+            body["model"] = model
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, http) = try await sendWithRetry(request, maxRetries: 2)
