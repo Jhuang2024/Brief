@@ -180,8 +180,16 @@ final class BriefingEngine {
         for group in groups { markPhase(group.rawValue, .active) }
         let openRouter = self.openRouter
         await withTaskGroup(of: (ResearchGroup, Result<ResearchPacket, Error>).self) { taskGroup in
-            for group in groups {
+            for (index, group) in groups.enumerated() {
                 taskGroup.addTask {
+                    // Stagger the concurrent research calls slightly so
+                    // they don't all land on the provider in the same
+                    // instant — free-tier models in particular have
+                    // strict per-minute burst limits, and a same-instant
+                    // burst of up to six calls is exactly what trips them.
+                    if index > 0 {
+                        try? await Task.sleep(nanoseconds: UInt64(index) * 400_000_000)
+                    }
                     do {
                         let packet = try await Self.runResearch(
                             group: group, context: context, openRouter: openRouter, providerOrder: providerOrder

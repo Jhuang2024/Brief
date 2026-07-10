@@ -122,12 +122,9 @@ struct OpenRouterService {
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let started = Date()
-        let (data, response) = try await session.data(for: request)
+        let (data, http) = try await sendWithRetry(request, maxRetries: 3)
         let duration = Date().timeIntervalSince(started)
 
-        guard let http = response as? HTTPURLResponse else {
-            throw OpenRouterError.invalidResponse
-        }
         guard (200..<300).contains(http.statusCode) else {
             throw OpenRouterError.httpError(
                 status: http.statusCode,
@@ -178,10 +175,7 @@ struct OpenRouterService {
         ]
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
-        let (data, response) = try await session.data(for: request)
-        guard let http = response as? HTTPURLResponse else {
-            throw OpenRouterError.invalidResponse
-        }
+        let (data, http) = try await sendWithRetry(request, maxRetries: 2)
         guard (200..<300).contains(http.statusCode) else {
             throw OpenRouterError.httpError(
                 status: http.statusCode,
@@ -194,6 +188,41 @@ struct OpenRouterService {
             throw OpenRouterError.invalidResponse
         }
         return "Connected — \(decoded.model ?? model) responded."
+    }
+
+    /// Sends `request`, retrying on 429 (rate limited) or 5xx (transient
+    /// server error) with backoff before giving up — a 429 means "too
+    /// many requests," not "no credits" (that's 402), and it routinely
+    /// clears within seconds. Concurrent research requests against a
+    /// free-tier model are exactly the kind of burst that trips per-minute
+    /// rate limits, so failing on the first 429 was needlessly fragile.
+    private func sendWithRetry(_ request: URLRequest, maxRetries: Int) async throws -> (Data, HTTPURLResponse) {
+        var lastError = OpenRouterError.invalidResponse
+        for attempt in 0...maxRetries {
+            let (data, response) = try await session.data(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                throw OpenRouterError.invalidResponse
+            }
+            if (http.statusCode == 429 || (500...599).contains(http.statusCode)), attempt < maxRetries {
+                lastError = .httpError(status: http.statusCode, message: Self.errorMessage(from: data))
+                let delay = Self.retryDelay(response: http, attempt: attempt)
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                continue
+            }
+            return (data, http)
+        }
+        throw lastError
+    }
+
+    /// Honors a `Retry-After` header (seconds) when the provider sends
+    /// one; otherwise a short exponential backoff (2s, 4s, 8s), capped at
+    /// 30s so a single request can't stall the whole pipeline.
+    private static func retryDelay(response: HTTPURLResponse, attempt: Int) -> TimeInterval {
+        if let header = response.value(forHTTPHeaderField: "Retry-After"),
+           let seconds = Double(header) {
+            return min(max(seconds, 1), 30)
+        }
+        return min(pow(2.0, Double(attempt + 1)), 30)
     }
 
     private static func jsonString(_ object: Any) -> String {
