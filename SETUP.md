@@ -85,12 +85,14 @@ a saved key and the first attempt fails — "use whichever one works."
      after a generation attempt: HTTP errors there usually name the
      rejected field.
 5. **Settings → Models** — research and editor models both default to
-   `openai/gpt-oss-120b:free` (OpenAI's open-weight GPT model, on the
-   free tier), so generation costs nothing on providers that support the
-   `:free` suffix convention. Run **Test Connection** after setup to
-   confirm each configured provider accepts that slug — if not, the
-   DeepSeek `:free` suggestions in that screen, or `auto:free`, are solid
-   fallbacks.
+   `auto:free`, which routes to whichever free-tier model currently has
+   capacity, so generation costs nothing. Pinning to one specific free
+   model (e.g. `openai/gpt-oss-120b:free`) is a suggestion worth trying
+   too, but risks upstream rate-limiting when that particular model is
+   oversubscribed — confirmed in testing, where a request failed with
+   "openai/gpt-oss-120b:free is temporarily rate-limited upstream." The
+   DeepSeek `:free` suggestions in that screen are solid alternatives if
+   `auto:free` itself ever has issues.
 
 ---
 

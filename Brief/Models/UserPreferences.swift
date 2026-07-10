@@ -199,15 +199,15 @@ struct UserPreferences: Codable, Equatable {
     var preferredProvider: AIProvider = .openRouter
     var useStructuredOutput: Bool = true
     var useWebSearchPlugin: Bool = true
-    // gpt-oss is OpenAI's open-weight GPT model (mid-2025) — the only
-    // GPT-lineage model a router can realistically offer for free, since
-    // OpenAI itself charges for GPT-4o/GPT-5-class access. ":free" is the
-    // OpenRouter suffix convention Bazaarlink also appears to use for its
-    // no-cost tier. Confirm with Settings -> AI Provider -> Test
-    // Connection; deepseek/deepseek-chat-v3.1:free is a solid fallback if
-    // this slug doesn't match a provider's actual catalog.
-    var researchModel: String = "openai/gpt-oss-120b:free"
-    var editorModel: String = "openai/gpt-oss-120b:free"
+    // "auto:free" rather than a pinned model: confirmed in testing that
+    // openai/gpt-oss-120b:free alone gets upstream-rate-limited under
+    // real-world demand ("temporarily rate-limited upstream" from
+    // OpenRouter's OpenInference-hosted pool) — a specific popular free
+    // model being oversubscribed, not an account or request problem.
+    // auto:free lets OpenRouter route to whichever free model currently
+    // has capacity instead of pinning to one that may be saturated.
+    var researchModel: String = "auto:free"
+    var editorModel: String = "auto:free"
     var researchDepth: ResearchDepth = .standard
 
     // Weather & location

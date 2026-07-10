@@ -160,11 +160,11 @@ struct ModelsSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 
     private static let suggestedModels = [
+        "auto:free",
         "openai/gpt-oss-120b:free",
         "openai/gpt-oss-20b:free",
         "deepseek/deepseek-chat-v3.1:free",
         "deepseek/deepseek-r1:free",
-        "auto:free",
         "openrouter/auto",
         "openai/gpt-4o-mini",
         "anthropic/claude-sonnet-4.5",
@@ -179,7 +179,7 @@ struct ModelsSettingsView: View {
             Section {
                 modelField(title: "Research model", text: $store.preferences.researchModel)
             } footer: {
-                Text("Used for the web-grounded research requests. Defaults to openai/gpt-oss-120b:free, so generation costs nothing. If that slug doesn't match Bazaarlink's actual catalog, Settings -> AI Provider -> Test Connection will show the rejection — try the DeepSeek :free suggestions below, or auto:free to let the provider pick. Suggestions follow OpenRouter's model-slug format (provider/model) — if you've changed the API base URL, use whatever slug that provider expects instead.")
+                Text("Used for the web-grounded research requests. Defaults to auto:free, which routes to whichever free model has capacity right now — pinning to one specific free model (e.g. openai/gpt-oss-120b:free) risks upstream rate-limiting when that particular model is oversubscribed. Suggestions follow OpenRouter's model-slug format (provider/model) — if you've changed the API base URL, use whatever slug that provider expects instead.")
                     .foregroundStyle(Color.inkSecondary)
             }
             Section {
