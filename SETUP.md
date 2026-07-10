@@ -81,11 +81,11 @@ provider works without a rebuild.
      after a generation attempt: HTTP errors there usually name the
      rejected field.
 5. **Settings → Models** — research and editor models both default to
-   `openai/gpt-4o-mini`. Run **Test Connection** after setup to confirm
-   Bazaarlink accepts that slug; if cost matters more than model choice,
-   `openai/gpt-oss-120b:free` or `auto:free` (also listed as suggestions
-   in that screen) route to free-tier models instead, on providers that
-   support the `:free` suffix convention.
+   `openai/gpt-oss-120b:free` (OpenAI's open-weight GPT model, on the
+   free tier), so generation costs nothing on providers that support the
+   `:free` suffix convention. Run **Test Connection** after setup to
+   confirm Bazaarlink accepts that slug — if not, the DeepSeek `:free`
+   suggestions in that screen, or `auto:free`, are solid fallbacks.
 
 ---
 
