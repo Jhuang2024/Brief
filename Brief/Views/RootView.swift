@@ -17,6 +17,9 @@ struct RootView: View {
                 .tabItem { Label("Settings", systemImage: "gearshape") }
                 .tag(RootTab.settings)
         }
+        .tint(Color.accentColor)
+        .toolbarBackground(Color.paper, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .environment(
             \.appReducedMotion,
             systemReduceMotion || environment.preferencesStore.preferences.reducedMotion

@@ -34,6 +34,8 @@ struct HistoryView: View {
                 }
             }
             .background(Color.paper)
+            .toolbarBackground(Color.paper, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .navigationTitle("History")
             .navigationDestination(for: UUID.self) { id in
                 if let brief = viewModel.briefs.first(where: { $0.id == id }) {
@@ -139,6 +141,8 @@ struct HistoryDetailView: View {
         }
         .scrollIndicators(.hidden)
         .background(Color.paper)
+        .toolbarBackground(Color.paper, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .navigationTitle(DateFormatting.shortDate.string(from: brief.briefingDate))
         .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $presentedStory) { story in

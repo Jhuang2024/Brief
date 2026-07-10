@@ -8,7 +8,7 @@ struct BriefContentView: View {
     let onStoryTap: (BriefStory) -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 28) {
+        VStack(alignment: .leading, spacing: 34) {
             TodayStripView(brief: brief, preferences: preferences)
                 .padding(.horizontal, 20)
 
@@ -241,6 +241,6 @@ struct StoryRowView: View {
             }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 12)
+        .padding(.vertical, 16)
     }
 }

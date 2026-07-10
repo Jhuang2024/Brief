@@ -16,8 +16,10 @@ struct SectionsSettingsView: View {
                 }
             } footer: {
                 Text("Limits are maximums, not quotas — a section with nothing worthwhile is omitted. Drag to reorder.")
+                    .foregroundStyle(Color.inkSecondary)
             }
         }
+        .briefFormStyle()
         .navigationTitle("Sections")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { EditButton() }
@@ -73,7 +75,7 @@ struct InterestsSettingsView: View {
     var body: some View {
         @Bindable var store = environment.preferencesStore
         List {
-            Section("Follow") {
+            Section {
                 interestLink("Topics", items: $store.preferences.topics, placeholder: "Topic")
                 interestLink("Companies", items: $store.preferences.companies, placeholder: "Company")
                 interestLink("People", items: $store.preferences.people, placeholder: "Person")
@@ -82,18 +84,23 @@ struct InterestsSettingsView: View {
                 interestLink("Sports Teams", items: $store.preferences.sportsTeams, placeholder: "Team")
                 interestLink("Athletes", items: $store.preferences.athletes, placeholder: "Athlete")
                 interestLink("Universities", items: $store.preferences.universities, placeholder: "University")
+            } header: {
+                FormSectionHeader(title: "Follow")
             }
             Section {
                 interestLink("Keywords to Exclude", items: $store.preferences.excludedKeywords, placeholder: "Keyword")
             } footer: {
                 Text("Stories matching excluded keywords are suppressed during research.")
+                    .foregroundStyle(Color.inkSecondary)
             }
             Section {
                 Toggle("Show scores (spoilers)", isOn: $store.preferences.spoilersEnabled)
             } footer: {
                 Text("When off, the sports section is asked to keep final scores out of headlines.")
+                    .foregroundStyle(Color.inkSecondary)
             }
         }
+        .briefFormStyle()
         .navigationTitle("Interests")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -135,12 +142,14 @@ struct SourcesSettingsView: View {
                 }
             } footer: {
                 Text("Sources from excluded domains are removed from research results entirely.")
+                    .foregroundStyle(Color.inkSecondary)
             }
             Section {
                 Toggle("Prefer official sources", isOn: $store.preferences.preferOfficialSources)
                 Toggle("Require multiple sources for major breaking news", isOn: $store.preferences.requireMultipleSourcesForBreaking)
             }
         }
+        .briefFormStyle()
         .navigationTitle("Sources")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -165,11 +174,13 @@ struct ModelsSettingsView: View {
                 modelField(title: "Research model", text: $store.preferences.researchModel)
             } footer: {
                 Text("Used for the web-grounded research requests. Any OpenRouter model slug works; openrouter/auto lets OpenRouter choose.")
+                    .foregroundStyle(Color.inkSecondary)
             }
             Section {
                 modelField(title: "Editor model", text: $store.preferences.editorModel)
             } footer: {
                 Text("Used for editorial synthesis and structured output.")
+                    .foregroundStyle(Color.inkSecondary)
             }
             Section {
                 Picker("Research depth", selection: $store.preferences.researchDepth) {
@@ -179,8 +190,10 @@ struct ModelsSettingsView: View {
                 }
             } footer: {
                 Text("Depth controls web-search result counts and how many candidate stories each research request may return. Deeper is slower and uses more credits.")
+                    .foregroundStyle(Color.inkSecondary)
             }
         }
+        .briefFormStyle()
         .navigationTitle("Models")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -189,7 +202,7 @@ struct ModelsSettingsView: View {
         VStack(alignment: .leading, spacing: 6) {
             Text(title)
                 .font(.footnote)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.inkSecondary)
             TextField("model/slug", text: text)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)

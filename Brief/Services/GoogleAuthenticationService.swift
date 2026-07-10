@@ -10,6 +10,7 @@ final class GoogleAuthenticationService {
     static let calendarReadOnlyScope = "https://www.googleapis.com/auth/calendar.readonly"
 
     enum ConnectionState: Equatable {
+        case notConfigured
         case disconnected
         case connected(email: String)
         case tokenExpired
@@ -17,6 +18,7 @@ final class GoogleAuthenticationService {
 
         var displayName: String {
             switch self {
+            case .notConfigured: return "Not set up"
             case .disconnected: return "Disconnected"
             case .connected(let email): return "Connected — \(email)"
             case .tokenExpired: return "Token expired"
@@ -29,17 +31,51 @@ final class GoogleAuthenticationService {
         case notConnected
         case missingScope
         case noPresentingViewController
+        case notConfigured
 
         var errorDescription: String? {
             switch self {
             case .notConnected: return "Google Calendar is not connected."
             case .missingScope: return "Calendar permission was not granted."
             case .noPresentingViewController: return "Could not present the Google sign-in screen."
+            case .notConfigured:
+                return "Google Calendar isn't set up yet. Add your OAuth client ID and URL scheme to Info.plist — see SETUP.md."
             }
         }
     }
 
+    /// Placeholder value shipped in Info.plist before setup. iOS OAuth
+    /// clients have no runtime "enter your credentials" step: the client
+    /// ID and its matching redirect URL scheme must be baked into
+    /// Info.plist at build time, per SETUP.md.
+    private static let placeholderClientID = "YOUR_CLIENT_ID.apps.googleusercontent.com"
+
+    /// The Info.plist `GIDClientID`, if present and not the placeholder.
+    static var configuredClientID: String? {
+        guard let value = Bundle.main.object(forInfoDictionaryKey: "GIDClientID") as? String,
+              !value.isEmpty,
+              value != placeholderClientID
+        else { return nil }
+        return value
+    }
+
+    static var isConfigured: Bool { configuredClientID != nil }
+
+    /// Explicitly configures GIDSignIn from Info.plist rather than
+    /// relying on the SDK's implicit lookup. Safe to call even when not
+    /// configured; `connect()` checks `isConfigured` before signing in.
+    static func configureIfPossible() {
+        guard let clientID = configuredClientID else { return }
+        GIDSignIn.sharedInstance.configuration = GIDConfiguration(clientID: clientID)
+    }
+
     private(set) var state: ConnectionState = .disconnected
+
+    init() {
+        if !Self.isConfigured {
+            state = .notConfigured
+        }
+    }
 
     var isConnected: Bool {
         if case .connected = state { return true }
@@ -49,11 +85,15 @@ final class GoogleAuthenticationService {
     /// True when a Google session exists on this device, even if it has
     /// not been restored yet in this launch.
     var hasPreviousSession: Bool {
-        GIDSignIn.sharedInstance.hasPreviousSignIn()
+        Self.isConfigured && GIDSignIn.sharedInstance.hasPreviousSignIn()
     }
 
     /// Restore the previous session on launch.
     func restorePreviousSession() async {
+        guard Self.isConfigured else {
+            state = .notConfigured
+            return
+        }
         guard GIDSignIn.sharedInstance.hasPreviousSignIn() else {
             state = .disconnected
             return
@@ -68,6 +108,10 @@ final class GoogleAuthenticationService {
 
     /// One-time connection from Settings, requesting only the read-only scope.
     func connect() async throws {
+        guard Self.isConfigured else {
+            state = .notConfigured
+            throw AuthError.notConfigured
+        }
         guard let presenter = Self.presentingViewController() else {
             throw AuthError.noPresentingViewController
         }

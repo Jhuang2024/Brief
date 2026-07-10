@@ -113,8 +113,10 @@ struct EditableListView: View {
                 }
             } footer: {
                 Text("Swipe to delete. Drag to reorder.")
+                    .foregroundStyle(Color.inkSecondary)
             }
         }
+        .briefFormStyle()
         .navigationTitle(title)
         .toolbar { EditButton() }
     }

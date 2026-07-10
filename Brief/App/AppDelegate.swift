@@ -10,6 +10,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         // BGTaskScheduler requires registration before launch finishes.
         AppEnvironment.shared.backgroundRefresh.register()
         UNUserNotificationCenter.current().delegate = self
+        AppearanceConfiguration.apply()
+        GoogleAuthenticationService.configureIfPossible()
         return true
     }
 

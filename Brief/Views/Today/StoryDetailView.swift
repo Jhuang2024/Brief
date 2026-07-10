@@ -67,6 +67,8 @@ struct StoryDetailView: View {
                 }
                 .scrollIndicators(.hidden)
             }
+            .toolbarBackground(Color.paper, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Done") { dismiss() }

@@ -18,6 +18,9 @@ struct SettingsView: View {
                 appearanceSection(store: $store)
                 dataSection
             }
+            .briefFormStyle()
+            .toolbarBackground(Color.paper, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .navigationTitle("Settings")
             .task {
                 await environment.notificationService.refreshAuthorizationStatus()
@@ -46,13 +49,13 @@ struct SettingsView: View {
     // MARK: - Connections
 
     private var connectionsSection: some View {
-        Section("Connections") {
+        Section {
             NavigationLink {
                 OpenRouterKeyView(viewModel: viewModel)
             } label: {
                 LabeledContent("OpenRouter API Key") {
                     Text(viewModel.hasStoredKey ? "Saved" : "Not set")
-                        .foregroundStyle(viewModel.hasStoredKey ? Color.secondary : Color.orange)
+                        .foregroundStyle(viewModel.hasStoredKey ? Color.inkSecondary : Color.orange)
                 }
             }
 
@@ -67,6 +70,8 @@ struct SettingsView: View {
 
             LabeledContent("Location", value: viewModel.locationStatusDescription)
             LabeledContent("Notifications", value: viewModel.notificationStatusDescription)
+        } header: {
+            FormSectionHeader(title: "Connections")
         }
     }
 
@@ -74,15 +79,26 @@ struct SettingsView: View {
     private var googleRow: some View {
         LabeledContent("Google Calendar") {
             Text(viewModel.googleAuth.state.displayName)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.inkSecondary)
                 .lineLimit(1)
                 .truncationMode(.middle)
         }
-        if viewModel.googleAuth.isConnected {
+        switch viewModel.googleAuth.state {
+        case .notConfigured:
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Google Calendar isn't set up yet.")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(Color.ink)
+                Text("An iOS OAuth client ID has to be added to Info.plist before the app can connect — this is a one-time step, not something you enter here. See SETUP.md for the five-minute Google Cloud walkthrough.")
+                    .font(.caption)
+                    .foregroundStyle(Color.inkSecondary)
+            }
+            .padding(.vertical, 2)
+        case .connected:
             Button("Disconnect Google", role: .destructive) {
                 viewModel.disconnectGoogle()
             }
-        } else {
+        default:
             Button("Connect Google Calendar") {
                 Task { await viewModel.connectGoogle() }
             }
@@ -97,7 +113,7 @@ struct SettingsView: View {
     // MARK: - Briefing
 
     private func briefingSection(store: Bindable<PreferencesStore>) -> some View {
-        Section("Briefing") {
+        Section {
             DatePicker(
                 "Morning time",
                 selection: morningTimeBinding,
@@ -119,6 +135,8 @@ struct SettingsView: View {
             Toggle("Include Calendar", isOn: store.preferences.includeCalendar)
             Toggle("Include weather", isOn: store.preferences.includeWeather)
             Toggle("Send event descriptions to OpenRouter", isOn: store.preferences.sendEventDescriptions)
+        } header: {
+            FormSectionHeader(title: "Briefing")
         }
     }
 
@@ -146,13 +164,15 @@ struct SettingsView: View {
             NavigationLink("Interests") { InterestsSettingsView() }
             NavigationLink("Sources") { SourcesSettingsView() }
             NavigationLink("Models") { ModelsSettingsView() }
+        } header: {
+            FormSectionHeader(title: "Content")
         }
     }
 
     // MARK: - Appearance
 
     private func appearanceSection(store: Bindable<PreferencesStore>) -> some View {
-        Section("Appearance") {
+        Section {
             Picker("Theme", selection: store.preferences.theme) {
                 ForEach(AppTheme.allCases) { theme in
                     Text(theme.displayName).tag(theme)
@@ -164,6 +184,8 @@ struct SettingsView: View {
                 }
             }
             Toggle("Reduce motion", isOn: store.preferences.reducedMotion)
+        } header: {
+            FormSectionHeader(title: "Appearance")
         }
     }
 
@@ -210,9 +232,10 @@ struct SettingsView: View {
             }
             #endif
         } header: {
-            Text("Data")
+            FormSectionHeader(title: "Data")
         } footer: {
             Text("Diagnostics describe the most recent generation and never include your OpenRouter key or Google tokens. Briefings are kept for \(BriefStore.retentionDays) days.")
+                .foregroundStyle(Color.inkSecondary)
         }
     }
 }
@@ -240,9 +263,10 @@ struct OpenRouterKeyView: View {
                     Button("Remove Key", role: .destructive) { viewModel.removeAPIKey() }
                 }
             } header: {
-                Text("OpenRouter API Key")
+                FormSectionHeader(title: "OpenRouter API Key")
             } footer: {
                 Text("Create a key at openrouter.ai → Keys. It is stored in the iOS Keychain, not in the app's files, and is only sent to openrouter.ai.")
+                    .foregroundStyle(Color.inkSecondary)
             }
 
             Section {
@@ -261,10 +285,11 @@ struct OpenRouterKeyView: View {
                 if let result = viewModel.connectionTestResult {
                     Text(result)
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.inkSecondary)
                 }
             }
         }
+        .briefFormStyle()
         .navigationTitle("OpenRouter")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -281,11 +306,14 @@ struct CalendarSelectionView: View {
                     HStack {
                         ProgressView()
                         Text("Loading calendars…")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Color.inkSecondary)
                     }
+                } else if !viewModel.googleAuth.isConnected {
+                    Text("Connect Google Calendar first.")
+                        .foregroundStyle(Color.inkSecondary)
                 } else if viewModel.availableCalendars.isEmpty {
                     Text("No calendars loaded yet.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(Color.inkSecondary)
                 } else {
                     ForEach(viewModel.availableCalendars) { calendar in
                         Toggle(isOn: Binding(
@@ -303,8 +331,10 @@ struct CalendarSelectionView: View {
                 }
             } footer: {
                 Text("Events from the selected calendars are merged chronologically and deduplicated. Access is read-only.")
+                    .foregroundStyle(Color.inkSecondary)
             }
         }
+        .briefFormStyle()
         .navigationTitle("Calendars")
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.loadCalendarList() }
