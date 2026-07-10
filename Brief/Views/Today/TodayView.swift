@@ -8,7 +8,17 @@ struct TodayView: View {
         NavigationStack {
             ZStack {
                 Color.paper.ignoresSafeArea()
-                content
+                VStack(spacing: 0) {
+                    if !viewModel.alerts.isEmpty {
+                        BreakingAlertsSection(
+                            alerts: viewModel.alerts,
+                            onDismiss: { viewModel.dismissAlert($0) }
+                        )
+                        .padding(.horizontal, 20)
+                        .padding(.top, 12)
+                    }
+                    content
+                }
             }
             .toolbar(.hidden, for: .navigationBar)
         }

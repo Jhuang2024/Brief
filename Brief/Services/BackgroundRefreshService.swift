@@ -1,27 +1,39 @@
 import BackgroundTasks
 import Foundation
 
-/// Best-effort pre-generation of the morning brief via BGAppRefreshTask.
-/// iOS decides when (and whether) the task actually runs, so the app
-/// never depends on it: launch-time generation is the reliable path.
+/// Registers and schedules Brief's two best-effort background tasks: the
+/// morning brief pre-generation, and the hourly breaking-news check. Both
+/// are `BGAppRefreshTask`s, which iOS runs at its own discretion, not on a
+/// guaranteed schedule — neither task's absence or lateness should ever
+/// leave the app in a broken state, only a slightly stale one that the
+/// matching foreground fallback (`generateIfNeeded`, `checkIfDue`) picks
+/// up next time the app is opened.
 @MainActor
 final class BackgroundRefreshService {
-    static let taskIdentifier = "com.jerry.brief.refresh"
+    static let refreshTaskIdentifier = "com.jerry.brief.refresh"
+    static let breakingCheckTaskIdentifier = "com.jerry.brief.breakingcheck"
 
     private let engine: BriefingEngine
     private let store: BriefStore
     private let preferencesStore: PreferencesStore
+    private let breakingCheckService: BreakingCheckService
 
-    init(engine: BriefingEngine, store: BriefStore, preferencesStore: PreferencesStore) {
+    init(
+        engine: BriefingEngine,
+        store: BriefStore,
+        preferencesStore: PreferencesStore,
+        breakingCheckService: BreakingCheckService
+    ) {
         self.engine = engine
         self.store = store
         self.preferencesStore = preferencesStore
+        self.breakingCheckService = breakingCheckService
     }
 
     /// Must be called before `didFinishLaunching` returns.
     func register() {
         BGTaskScheduler.shared.register(
-            forTaskWithIdentifier: Self.taskIdentifier,
+            forTaskWithIdentifier: Self.refreshTaskIdentifier,
             using: .main
         ) { [weak self] task in
             // Registered on the main queue, so hopping to the main actor is safe.
@@ -30,15 +42,40 @@ final class BackgroundRefreshService {
                     task.setTaskCompleted(success: false)
                     return
                 }
-                self.handle(refreshTask)
+                self.handleRefresh(refreshTask)
+            }
+        }
+        BGTaskScheduler.shared.register(
+            forTaskWithIdentifier: Self.breakingCheckTaskIdentifier,
+            using: .main
+        ) { [weak self] task in
+            MainActor.assumeIsolated {
+                guard let self, let checkTask = task as? BGAppRefreshTask else {
+                    task.setTaskCompleted(success: false)
+                    return
+                }
+                self.handleBreakingCheck(checkTask)
             }
         }
     }
 
     /// Schedule the next attempt shortly before the configured morning time.
     func scheduleNextRefresh() {
-        let request = BGAppRefreshTaskRequest(identifier: Self.taskIdentifier)
+        let request = BGAppRefreshTaskRequest(identifier: Self.refreshTaskIdentifier)
         request.earliestBeginDate = nextMorningRunDate()
+        try? BGTaskScheduler.shared.submit(request)
+    }
+
+    /// Submitted once at launch and again after every run (success or
+    /// not), so the check keeps recurring roughly hourly with only ever
+    /// one request in flight. No-ops when the feature is off in Settings.
+    func scheduleNextBreakingCheck(after date: Date = Date()) {
+        guard preferencesStore.preferences.breakingAlertsEnabled else {
+            BGTaskScheduler.shared.cancel(taskRequestWithIdentifier: Self.breakingCheckTaskIdentifier)
+            return
+        }
+        let request = BGAppRefreshTaskRequest(identifier: Self.breakingCheckTaskIdentifier)
+        request.earliestBeginDate = Calendar.current.date(byAdding: .minute, value: 60, to: date)
         try? BGTaskScheduler.shared.submit(request)
     }
 
@@ -53,17 +90,23 @@ final class BackgroundRefreshService {
         )
     }
 
-    private func handle(_ task: BGAppRefreshTask) {
+    /// Only ever pre-generates today's brief if it doesn't exist yet — an
+    /// existing brief is never regenerated here just because it's gotten
+    /// old during the day. This mirrors `BriefingEngine.generateIfNeeded`'s
+    /// two-condition rule (morning time, or manual refresh) exactly;
+    /// without matching it here, a background firing later in the day
+    /// could silently burn API credits regenerating a brief nobody asked
+    /// to refresh.
+    private func handleRefresh(_ task: BGAppRefreshTask) {
         // Always keep the chain alive for tomorrow.
         scheduleNextRefresh()
 
         let work = Task { [engine, store] in
-            // Skip when today's brief is already current.
-            if let existing = store.todaysBrief(), existing.isCurrent() {
+            if store.todaysBrief() != nil {
                 task.setTaskCompleted(success: true)
                 return
             }
-            await engine.generate(trigger: .background)
+            await engine.generateIfNeeded(trigger: .background)
             task.setTaskCompleted(success: !Task.isCancelled)
         }
         task.expirationHandler = { [engine] in
@@ -72,5 +115,16 @@ final class BackgroundRefreshService {
                 engine.cancelGeneration()
             }
         }
+    }
+
+    private func handleBreakingCheck(_ task: BGAppRefreshTask) {
+        let work = Task { [breakingCheckService] in
+            await breakingCheckService.checkIfDue()
+            task.setTaskCompleted(success: !Task.isCancelled)
+        }
+        task.expirationHandler = {
+            work.cancel()
+        }
+        scheduleNextBreakingCheck()
     }
 }

@@ -24,16 +24,24 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     }
 
     // Tapping the morning reminder opens Today; the cached brief renders
-    // immediately and generation starts if it is missing.
+    // immediately and generation starts if it is missing. Tapping a
+    // breaking alert also opens Today, but must never trigger a full
+    // brief generation — the alert is already stored and shown inline,
+    // and generating a brief was never one of the two conditions that are
+    // allowed to spend API credits.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        let isBreakingAlert = response.notification.request.content.categoryIdentifier
+            == NotificationService.breakingAlertCategory
         Task { @MainActor in
             let environment = AppEnvironment.shared
             environment.selectedTab = .today
-            await environment.engine.generateIfNeeded(trigger: .notification)
+            if !isBreakingAlert {
+                await environment.engine.generateIfNeeded(trigger: .notification)
+            }
             completionHandler()
         }
     }

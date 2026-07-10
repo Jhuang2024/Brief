@@ -1,0 +1,227 @@
+import Foundation
+
+/// Best-effort, cost-capped watcher that runs roughly once an hour,
+/// separate from the daily brief pipeline. Deliberately NOT another brief:
+/// one small completion call with a strict, very-high-bar schema, and in
+/// the overwhelming majority of hours it finds nothing and does nothing —
+/// no alert saved, no notification sent, no further cost. This is the only
+/// thing in the app allowed to touch the network outside the two brief
+/// generation triggers (morning time, manual refresh).
+@MainActor
+@Observable
+final class BreakingCheckService {
+    /// Slightly under an hour so a BGAppRefreshTask firing a bit early, or
+    /// the app being opened mid-hour, doesn't get silently skipped — while
+    /// still bounding worst-case usage to roughly once an hour.
+    private static let minimumInterval: TimeInterval = 55 * 60
+
+    private let store: BriefStore
+    private let alertStore: BreakingAlertStore
+    private let preferencesStore: PreferencesStore
+    private let notificationService: NotificationService
+    private let openRouter = OpenRouterService()
+
+    private(set) var lastCheckedAt: Date?
+    private var checkTask: Task<Void, Never>?
+
+    init(
+        store: BriefStore,
+        alertStore: BreakingAlertStore,
+        preferencesStore: PreferencesStore,
+        notificationService: NotificationService
+    ) {
+        self.store = store
+        self.alertStore = alertStore
+        self.preferencesStore = preferencesStore
+        self.notificationService = notificationService
+    }
+
+    /// Entry point for both the hourly background task and a foreground
+    /// fallback call. A concurrent caller shares the in-flight check
+    /// rather than starting a second one. Never throws — there is no
+    /// user-facing surface for a failed background check, so a failure
+    /// here just means this hour is silently skipped, same as finding
+    /// nothing worth reporting.
+    func checkIfDue(now: Date = Date()) async {
+        if let checkTask {
+            await checkTask.value
+            return
+        }
+        let gatingPreferences = preferencesStore.preferences
+        guard gatingPreferences.breakingAlertsEnabled, gatingPreferences.notificationsEnabled else { return }
+        if let lastCheckedAt, now.timeIntervalSince(lastCheckedAt) < Self.minimumInterval {
+            return
+        }
+        let task = Task { await self.run(now: now) }
+        checkTask = task
+        await task.value
+        checkTask = nil
+    }
+
+    private func run(now: Date) async {
+        lastCheckedAt = now
+        let preferences = preferencesStore.preferences
+        let providerOrder = preferences.providerAttemptOrder
+        guard !providerOrder.isEmpty else { return }
+
+        let recentFingerprints = Set(
+            store.recentStoryMemory(days: 3, now: now).map(\.fingerprint) +
+            alertStore.recentFingerprints(days: 7, now: now)
+        )
+        let recentHeadlines = Array(Set(
+            store.recentStoryMemory(days: 3, now: now).map(\.headline) +
+            alertStore.recentHeadlines(days: 7, now: now)
+        )).prefix(60)
+
+        do {
+            let openRouter = self.openRouter
+            let result = try await ProviderFallback.withTimeout(seconds: 25, stage: "Breaking check") {
+                try await ProviderFallback.complete(
+                    providerOrder: providerOrder,
+                    openRouter: openRouter,
+                    model: preferences.researchModel,
+                    systemPrompt: Self.systemPrompt,
+                    userPrompt: Self.userPrompt(
+                        preferences: preferences,
+                        recentHeadlines: Array(recentHeadlines),
+                        now: now
+                    ),
+                    schemaName: "breaking_check",
+                    schema: Self.schema,
+                    useStructuredOutput: preferences.useStructuredOutput,
+                    webSearch: preferences.useWebSearchPlugin,
+                    webResults: 4,
+                    temperature: 0.1,
+                    maxTokens: 500
+                )
+            }
+
+            guard let response = Self.decode(result.content), response.hasAlert else { return }
+            let headline = response.headline.trimmingCharacters(in: .whitespacesAndNewlines)
+            let summary = response.summary.trimmingCharacters(in: .whitespacesAndNewlines)
+            let whyItMatters = response.whyItMatters.trimmingCharacters(in: .whitespacesAndNewlines)
+            let sourceURL = response.sourceURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !headline.isEmpty, !summary.isEmpty, !whyItMatters.isEmpty,
+                  URLValidation.isPlausible(sourceURL)
+            else { return }
+
+            let domain = URLValidation.domain(of: sourceURL)
+            let entities = Fingerprint.entities(from: headline + " " + summary)
+            let fingerprint = Fingerprint.make(
+                headline: headline, sourceURL: sourceURL, entities: entities, category: "breaking"
+            )
+            guard !recentFingerprints.contains(fingerprint) else { return }
+
+            let sourceTitle = response.sourceTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+            let alert = BreakingAlert(
+                fingerprint: fingerprint,
+                headline: headline,
+                summary: summary,
+                whyItMatters: whyItMatters,
+                sourceTitle: sourceTitle.isEmpty ? domain : sourceTitle,
+                sourceDomain: domain,
+                sourceURLString: sourceURL,
+                detectedAt: now
+            )
+            alertStore.save(alert)
+            await notificationService.sendBreakingAlertNotification(headline: headline)
+        } catch {
+            // Best-effort only: an hourly check failing (timeout, no
+            // provider reachable, malformed output) is treated the same
+            // as finding nothing — silently skip this hour.
+        }
+    }
+
+    private static func decode(_ content: String) -> BreakingCheckResponse? {
+        try? JSONDecoder().decode(BreakingCheckResponse.self, from: Data(extractJSON(content).utf8))
+    }
+
+    /// Strip markdown fences and any prose around the outermost JSON object.
+    private static func extractJSON(_ content: String) -> String {
+        var text = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if text.hasPrefix("```") {
+            text = text
+                .replacingOccurrences(of: "```json", with: "")
+                .replacingOccurrences(of: "```", with: "")
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if let first = text.firstIndex(of: "{"), let last = text.lastIndex(of: "}"), first < last {
+            return String(text[first...last])
+        }
+        return text
+    }
+
+    // MARK: - Prompt + schema
+
+    private static let systemPrompt = """
+    You are a narrow breaking-news watcher for a private briefing app belonging to Jerry. You run silently roughly once an hour, separate from Jerry's daily morning brief.
+
+    Your only job is to decide whether something has happened recently that is so urgent or significant Jerry would want to be interrupted with a push notification right now, rather than wait to read about it in tomorrow's brief.
+
+    The bar is very high. This is NOT another briefing. In the overwhelming majority of checks, nothing qualifies, and you must return hasAlert: false with every other field left as an empty string. Only return hasAlert: true for something like a major confirmed high-impact development directly and specifically relevant to Jerry's stated interests below: think market-moving news, a materially important announcement from a company or person Jerry follows, or a globally significant event. Never alert for routine updates, incremental news, rumors, minor score changes, opinion pieces, or anything that can just as easily wait for the regular brief.
+
+    Never invent a headline, source, or URL. Any alert must cite a real URL you found through web search.
+
+    Return only data matching the required JSON schema.
+    """
+
+    private static func userPrompt(preferences: UserPreferences, recentHeadlines: [String], now: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .full
+        formatter.timeStyle = .short
+        let interestGroups: [(String, [String])] = [
+            ("Topics", preferences.topics),
+            ("Companies", preferences.companies),
+            ("People", preferences.people),
+            ("F1 drivers/teams", preferences.f1DriversAndTeams),
+            ("Sports leagues", preferences.sportsLeagues),
+            ("Sports teams", preferences.sportsTeams),
+            ("Athletes", preferences.athletes),
+        ]
+        let interests = interestGroups
+            .filter { !$0.1.isEmpty }
+            .map { "\($0.0): \($0.1.joined(separator: ", "))" }
+            .joined(separator: "\n")
+
+        let alreadyCovered = recentHeadlines.isEmpty
+            ? "(none)"
+            : recentHeadlines.joined(separator: "\n")
+
+        return """
+        Current time: \(formatter.string(from: now))
+
+        Jerry's interests:
+        \(interests)
+
+        Stories already covered in the last few days — never re-flag one of these unless there is a major new development since:
+        \(alreadyCovered)
+
+        Check whether anything has happened recently that is urgent enough to interrupt Jerry right now.
+        """
+    }
+
+    private static var schema: [String: Any] {
+        [
+            "type": "object",
+            "additionalProperties": false,
+            "properties": [
+                "hasAlert": ["type": "boolean", "description": "True only if something clears the very high urgency bar"],
+                "headline": ["type": "string", "description": "Empty string if hasAlert is false"],
+                "summary": ["type": "string", "description": "2-3 factual sentences. Empty string if hasAlert is false"],
+                "whyItMatters": ["type": "string", "description": "Why this is urgent enough to interrupt Jerry right now. Empty string if hasAlert is false"],
+                "sourceTitle": ["type": "string", "description": "Publication name. Empty string if hasAlert is false"],
+                "sourceURL": ["type": "string", "description": "URL actually found via web search. Empty string if hasAlert is false"],
+            ],
+            "required": ["hasAlert", "headline", "summary", "whyItMatters", "sourceTitle", "sourceURL"],
+        ]
+    }
+}
+
+private struct BreakingCheckResponse: Codable {
+    var hasAlert: Bool
+    var headline: String
+    var summary: String
+    var whyItMatters: String
+    var sourceTitle: String
+    var sourceURL: String
+}

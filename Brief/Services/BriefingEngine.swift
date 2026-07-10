@@ -106,15 +106,35 @@ final class BriefingEngine {
 
     // MARK: - Entry points
 
-    /// Generate when today's brief is missing or stale. Shows cached content
-    /// meanwhile; never blocks the UI.
+    /// Automatic generation happens under exactly two conditions: it's at
+    /// or after the configured morning time and today's brief doesn't
+    /// exist yet (covers the background pre-generation attempt, a
+    /// notification tap — which only fires at that time — and opening
+    /// the app after it with nothing generated yet), or the caller is a
+    /// manual refresh (which goes through `generate(trigger:)` directly,
+    /// bypassing this gate entirely). A brief that already exists is
+    /// never auto-regenerated just because it's gotten old during the
+    /// day — deliberately, so the app doesn't spend API credits on its
+    /// own. Only a manual refresh does that from that point on.
     func generateIfNeeded(trigger: Trigger) async {
-        if let existing = store.todaysBrief() {
-            let stale = !existing.isCurrent()
-            let shouldRefresh = stale && preferencesStore.preferences.automaticRefreshEnabled
-            guard shouldRefresh || trigger == .manual else { return }
+        guard store.todaysBrief() == nil else { return }
+        if trigger != .manual {
+            guard preferencesStore.preferences.automaticRefreshEnabled,
+                  isAtOrPastMorningTime()
+            else { return }
         }
         await generate(trigger: trigger)
+    }
+
+    private func isAtOrPastMorningTime(now: Date = Date()) -> Bool {
+        let preferences = preferencesStore.preferences
+        guard let scheduled = Calendar.current.date(
+            bySettingHour: preferences.morningMinutesAfterMidnight / 60,
+            minute: preferences.morningMinutesAfterMidnight % 60,
+            second: 0,
+            of: now
+        ) else { return true }
+        return now >= scheduled
     }
 
     /// Run a generation, reusing any in-progress one.
@@ -432,54 +452,6 @@ final class BriefingEngine {
         return ResearchGroup.allCases.filter { groups.contains($0) }
     }
 
-    /// Tries each provider in `providerOrder` (already filtered to ones
-    /// with a saved key) in turn, returning the first success. If every
-    /// attempt fails, throws a combined error naming each provider and
-    /// what went wrong with it, so a Settings misconfiguration is
-    /// diagnosable rather than just "it didn't work."
-    private nonisolated static func completeWithFallback(
-        providerOrder: [AIProvider],
-        openRouter: OpenRouterService,
-        model: String,
-        systemPrompt: String,
-        userPrompt: String,
-        schemaName: String,
-        schema: [String: Any],
-        useStructuredOutput: Bool,
-        webSearch: Bool,
-        webResults: Int = 10,
-        temperature: Double = 0.3
-    ) async throws -> OpenRouterService.CompletionResult {
-        var failures: [(AIProvider, Error)] = []
-        for provider in providerOrder {
-            guard let apiKey = KeychainService.loadAPIKey(provider.keychainKind) else { continue }
-            do {
-                return try await openRouter.complete(
-                    baseURL: provider.baseURL,
-                    apiKey: apiKey,
-                    model: model,
-                    systemPrompt: systemPrompt,
-                    userPrompt: userPrompt,
-                    schemaName: schemaName,
-                    schema: schema,
-                    useStructuredOutput: useStructuredOutput,
-                    webSearch: webSearch,
-                    webResults: webResults,
-                    temperature: temperature
-                )
-            } catch {
-                failures.append((provider, error))
-            }
-        }
-        if failures.count == 1, let only = failures.first {
-            throw only.1
-        }
-        let details = failures
-            .map { "\($0.0.displayName): \($0.1.localizedDescription)" }
-            .joined(separator: " ")
-        throw OpenRouterService.OpenRouterError.allProvidersFailed(details: details)
-    }
-
     private nonisolated static func runResearch(
         group: ResearchGroup,
         context: BriefContext,
@@ -488,7 +460,7 @@ final class BriefingEngine {
     ) async throws -> ResearchPacket {
         let preferences = context.preferences
         let result = try await withTimeout(seconds: 45, stage: "Research") {
-            try await completeWithFallback(
+            try await ProviderFallback.complete(
                 providerOrder: providerOrder,
                 openRouter: openRouter,
                 model: preferences.researchModel,
@@ -552,7 +524,7 @@ final class BriefingEngine {
         // capturing the plain-struct value directly is not.
         let openRouter = self.openRouter
         let result = try await Self.withTimeout(seconds: 45, stage: "Editing") {
-            try await Self.completeWithFallback(
+            try await ProviderFallback.complete(
                 providerOrder: providerOrder,
                 openRouter: openRouter,
                 model: preferences.editorModel,
@@ -581,7 +553,7 @@ final class BriefingEngine {
             // One repair attempt: send the broken output and the error back.
             diagnostics.errors.append("Editor output failed to decode: \(error.localizedDescription). Attempting repair.")
             let repair = try await Self.withTimeout(seconds: 45, stage: "Editing repair") {
-                try await Self.completeWithFallback(
+                try await ProviderFallback.complete(
                     providerOrder: providerOrder,
                     openRouter: openRouter,
                     model: preferences.editorModel,

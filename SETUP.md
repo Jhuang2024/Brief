@@ -29,7 +29,7 @@ unless you rename the bundle ID or want to re-check:
 | --- | --- | --- |
 | `NSLocationWhenInUseUsageDescription` | "Brief uses your location to show the correct morning weather." | Core Location prompt |
 | `UIBackgroundModes` | `fetch` | Background app refresh |
-| `BGTaskSchedulerPermittedIdentifiers` | `com.jerry.brief.refresh` | The BGAppRefreshTask identifier |
+| `BGTaskSchedulerPermittedIdentifiers` | `com.jerry.brief.refresh`, `com.jerry.brief.breakingcheck` | The two BGAppRefreshTask identifiers |
 | `GIDClientID` | placeholder — replace in step 3 | Google Sign-In |
 | `CFBundleURLTypes` → URL scheme | placeholder — replace in step 3 | Google Sign-In redirect |
 
@@ -38,9 +38,22 @@ The **Background Modes → Background fetch** capability is provided by the
 Capabilities. Notification permission is requested at runtime — no capability
 needed for local notifications.
 
-If you change the bundle identifier, also change the background task
-identifier is **not** required — it is an app-chosen string and stays
-`com.jerry.brief.refresh`.
+If you change the bundle identifier, changing the background task
+identifiers is **not** required — they are app-chosen strings and stay
+`com.jerry.brief.refresh` / `com.jerry.brief.breakingcheck`.
+
+### API usage is capped to two things
+
+The brief itself only ever regenerates under two conditions: at the
+configured morning time, or a manual tap on refresh — never automatically
+just because it's gotten old, and never as a side effect of another
+setting change (e.g. connecting Google Calendar). Separately, a much
+cheaper hourly check (`com.jerry.brief.breakingcheck`, toggled in
+**Settings → Breaking Alerts**) makes one small, capped-length completion
+call roughly once an hour, looking only for news urgent enough to
+interrupt the day. Almost every hour it finds nothing and costs nothing;
+when it does find something, it's saved on-device and a notification is
+sent — tapping that notification never triggers a brief generation.
 
 ---
 

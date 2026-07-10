@@ -162,6 +162,10 @@ struct UserPreferences: Codable, Equatable {
     var maxReadingMinutes: Int = 7
     var automaticRefreshEnabled: Bool = true
     var notificationsEnabled: Bool = true
+    /// Hourly best-effort check for news urgent enough to interrupt the
+    /// day, separate from and much cheaper than the daily brief. Off
+    /// disables the background check entirely — no API calls, no alerts.
+    var breakingAlertsEnabled: Bool = true
     var includeWhyItMatters: Bool = true
     var includeCalendar: Bool = true
     var includeWeather: Bool = true

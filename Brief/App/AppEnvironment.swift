@@ -20,6 +20,8 @@ final class AppEnvironment {
     let locationService: LocationService
     let notificationService: NotificationService
     let engine: BriefingEngine
+    let alertStore: BreakingAlertStore
+    let breakingCheck: BreakingCheckService
     let backgroundRefresh: BackgroundRefreshService
     let speech: SpeechService
 
@@ -30,7 +32,9 @@ final class AppEnvironment {
     private var launchTask: Task<Void, Never>?
 
     private init() {
-        let schema = Schema([DailyBrief.self, BriefSection.self, BriefStory.self, BriefSource.self])
+        let schema = Schema([
+            DailyBrief.self, BriefSection.self, BriefStory.self, BriefSource.self, BreakingAlert.self,
+        ])
         do {
             modelContainer = try ModelContainer(for: schema)
         } catch {
@@ -51,10 +55,18 @@ final class AppEnvironment {
             googleAuth: googleAuth,
             locationService: locationService
         )
+        alertStore = BreakingAlertStore(container: modelContainer)
+        breakingCheck = BreakingCheckService(
+            store: briefStore,
+            alertStore: alertStore,
+            preferencesStore: preferencesStore,
+            notificationService: notificationService
+        )
         backgroundRefresh = BackgroundRefreshService(
             engine: engine,
             store: briefStore,
-            preferencesStore: preferencesStore
+            preferencesStore: preferencesStore,
+            breakingCheckService: breakingCheck
         )
         speech = SpeechService()
     }
@@ -75,7 +87,9 @@ final class AppEnvironment {
         }
         let task = Task {
             await briefStore.pruneOldBriefs()
+            await alertStore.pruneOld()
             backgroundRefresh.scheduleNextRefresh()
+            backgroundRefresh.scheduleNextBreakingCheck()
             await googleAuth.restorePreviousSession()
             await notificationService.updateMorningReminder(preferences: preferencesStore.preferences)
         }

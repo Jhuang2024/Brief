@@ -1,11 +1,13 @@
 import Foundation
 import UserNotifications
 
-/// Schedules the single daily morning reminder.
+/// Schedules the daily morning reminder and fires immediate breaking-alert
+/// notifications.
 @MainActor
 @Observable
 final class NotificationService {
     static let morningReminderIdentifier = "com.jerry.brief.morning-reminder"
+    static let breakingAlertCategory = "com.jerry.brief.breaking-alert"
 
     private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
 
@@ -55,5 +57,27 @@ final class NotificationService {
             trigger: trigger
         )
         try? await center.add(request)
+    }
+
+    /// Fires immediately for a hurdle-cleared breaking alert. Separate
+    /// identifier per alert (rather than the fixed morning-reminder one)
+    /// so multiple rare alerts in one day each show up instead of
+    /// replacing each other, and `trigger: nil` delivers it right away
+    /// rather than scheduling it for later.
+    func sendBreakingAlertNotification(headline: String) async {
+        guard await requestAuthorizationIfNeeded() else { return }
+
+        let content = UNMutableNotificationContent()
+        content.title = "Brief · Breaking"
+        content.body = headline
+        content.sound = .default
+        content.categoryIdentifier = Self.breakingAlertCategory
+
+        let request = UNNotificationRequest(
+            identifier: "\(Self.breakingAlertCategory).\(UUID().uuidString)",
+            content: content,
+            trigger: nil
+        )
+        try? await UNUserNotificationCenter.current().add(request)
     }
 }

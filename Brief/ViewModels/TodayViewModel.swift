@@ -27,6 +27,7 @@ final class TodayViewModel {
     var brief: DailyBrief?
     var showRefreshConfirmation = false
     var presentedStory: BriefStory?
+    var alerts: [BreakingAlert] = []
 
     init(environment: AppEnvironment = .shared) {
         self.environment = environment
@@ -53,9 +54,27 @@ final class TodayViewModel {
     /// setup already finished.
     func onAppear() async {
         reloadFromStore()
+        reloadAlerts()
         await environment.ensureLaunched()
         await engine.generateIfNeeded(trigger: .launch)
         reloadFromStore()
+        // Fire-and-forget: a foreground fallback for the hourly check, in
+        // case the best-effort background task hasn't run recently.
+        // `checkIfDue` already no-ops if it's been under an hour, so this
+        // never costs anything extra beyond the one hourly call.
+        Task {
+            await environment.breakingCheck.checkIfDue()
+            reloadAlerts()
+        }
+    }
+
+    func reloadAlerts() {
+        alerts = environment.alertStore.unreadAlerts()
+    }
+
+    func dismissAlert(_ alert: BreakingAlert) {
+        environment.alertStore.markRead(alert)
+        alerts.removeAll { $0.id == alert.id }
     }
 
     func reloadIfGenerationAdvanced() {

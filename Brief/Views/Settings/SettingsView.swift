@@ -14,6 +14,7 @@ struct SettingsView: View {
             Form {
                 connectionsSection
                 briefingSection(store: $store)
+                breakingAlertsSection(store: $store)
                 listsSection
                 appearanceSection(store: $store)
                 dataSection
@@ -33,6 +34,9 @@ struct SettingsView: View {
             }
             .onChange(of: store.preferences.notificationsEnabled) {
                 rescheduleReminder()
+            }
+            .onChange(of: store.preferences.breakingAlertsEnabled) {
+                environment.backgroundRefresh.scheduleNextBreakingCheck()
             }
         }
     }
@@ -141,7 +145,7 @@ struct SettingsView: View {
                 value: store.preferences.maxReadingMinutes,
                 in: 3...15
             )
-            Toggle("Refresh automatically when stale", isOn: store.preferences.automaticRefreshEnabled)
+            Toggle("Generate automatically at morning time", isOn: store.preferences.automaticRefreshEnabled)
             Toggle("Morning notification", isOn: store.preferences.notificationsEnabled)
             Toggle("Include “Why it matters”", isOn: store.preferences.includeWhyItMatters)
             Toggle("Include Calendar", isOn: store.preferences.includeCalendar)
@@ -149,6 +153,20 @@ struct SettingsView: View {
             Toggle("Send event descriptions to OpenRouter", isOn: store.preferences.sendEventDescriptions)
         } header: {
             FormSectionHeader(title: "Briefing")
+        } footer: {
+            Text("The brief only generates automatically at the morning time above, or when you tap refresh — never in between, even if it gets old during the day. This keeps API usage predictable.")
+                .foregroundStyle(Color.inkSecondary)
+        }
+    }
+
+    private func breakingAlertsSection(store: Bindable<PreferencesStore>) -> some View {
+        Section {
+            Toggle("Hourly breaking check", isOn: store.preferences.breakingAlertsEnabled)
+        } header: {
+            FormSectionHeader(title: "Breaking Alerts")
+        } footer: {
+            Text("Roughly once an hour, a single small check looks for news urgent enough to interrupt your day — a very high bar, deliberately not another brief. Most hours find nothing and cost nothing. When something does qualify, it's saved here and you get a notification; otherwise you hear nothing at all.")
+                .foregroundStyle(Color.inkSecondary)
         }
     }
 

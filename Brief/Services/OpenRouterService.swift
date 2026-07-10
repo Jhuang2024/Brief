@@ -66,6 +66,9 @@ struct OpenRouterService {
     ///   - webSearch: attach the OpenRouter-style web plugin, when enabled
     ///     in Settings.
     ///   - webResults: plugin max_results, configurable via research depth.
+    ///   - maxTokens: caps the response length when set — used by the
+    ///     hourly breaking check to keep an already-cheap request cheap
+    ///     even if the model tries to ramble.
     func complete(
         baseURL: URL,
         apiKey: String,
@@ -77,7 +80,8 @@ struct OpenRouterService {
         useStructuredOutput: Bool,
         webSearch: Bool,
         webResults: Int = 10,
-        temperature: Double = 0.3
+        temperature: Double = 0.3,
+        maxTokens: Int? = nil
     ) async throws -> CompletionResult {
         var body: [String: Any] = [
             "model": model,
@@ -88,6 +92,9 @@ struct OpenRouterService {
             "temperature": temperature,
             "usage": ["include": true],
         ]
+        if let maxTokens {
+            body["max_tokens"] = maxTokens
+        }
         if useStructuredOutput {
             body["response_format"] = [
                 "type": "json_schema",

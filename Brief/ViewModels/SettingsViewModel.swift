@@ -123,27 +123,21 @@ final class SettingsViewModel {
 
     // MARK: - Google Calendar
 
+    /// Deliberately does not regenerate today's brief on connect, even if
+    /// the cached brief predates this connection and still shows Calendar
+    /// as unavailable — the brief only ever regenerates at the configured
+    /// morning time or via a manual refresh, never automatically as a
+    /// side effect of another setting change, so connecting never burns
+    /// API credits on its own. A manual refresh picks up the new
+    /// connection immediately.
     func connectGoogle() async {
         googleError = nil
         do {
             try await googleAuth.connect()
             await loadCalendarList()
-            regenerateTodaysBriefIfNeeded()
         } catch {
             googleError = error.localizedDescription
         }
-    }
-
-    /// Today's cached brief was generated before this connection existed,
-    /// so it still shows Calendar as unavailable — regenerate once so it
-    /// reflects the new connection instead of leaving Jerry to guess that
-    /// a manual refresh is needed. Today picks this up automatically via
-    /// `engine.generationCounter`, regardless of which tab is open.
-    private func regenerateTodaysBriefIfNeeded() {
-        guard preferencesStore.preferences.includeCalendar else { return }
-        let brief = environment.briefStore.todaysBrief()
-        guard brief == nil || brief?.calendarWasAvailable == false else { return }
-        Task { await environment.engine.generate(trigger: .manual) }
     }
 
     func disconnectGoogle() {
