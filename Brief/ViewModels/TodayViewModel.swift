@@ -102,6 +102,13 @@ final class TodayViewModel {
         guard !engine.isGenerating else { return }
         Haptics.tap()
         Task {
+            // Wait for launch setup — notably the Google session restore —
+            // before generating, exactly as onAppear() does. Without this, a
+            // manual refresh fired before the previous Google session finished
+            // restoring would generate a brief that wrongly reports Calendar
+            // as unavailable. ensureLaunched() is memoized, so this is a
+            // no-op once launch setup has already completed.
+            await environment.ensureLaunched()
             await engine.generate(trigger: .manual)
             reloadFromStore()
         }

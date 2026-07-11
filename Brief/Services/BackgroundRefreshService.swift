@@ -119,7 +119,18 @@ final class BackgroundRefreshService {
             // actual token fetch then fails because no session was ever
             // restored into this process — silently generating a brief
             // that reports Calendar as unavailable despite being connected.
-            await googleAuth.restorePreviousSession()
+            //
+            // Network in a freshly-spawned background process can also be
+            // slow to come up, so a single restore attempt that hits a
+            // transient error would disable Calendar for the whole day's
+            // brief. Retry a few times with a short backoff before giving
+            // up; each attempt stops as soon as a live session exists (or
+            // there is no previous sign-in on disk to restore at all).
+            for attempt in 0..<3 {
+                await googleAuth.restorePreviousSession()
+                if googleAuth.hasLiveSession || !googleAuth.hasPreviousSession { break }
+                if attempt < 2 { try? await Task.sleep(nanoseconds: 2_000_000_000) }
+            }
             await engine.generateIfNeeded(trigger: .background)
             task.setTaskCompleted(success: !Task.isCancelled)
         }

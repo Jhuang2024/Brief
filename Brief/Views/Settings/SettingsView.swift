@@ -124,6 +124,37 @@ struct SettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.red)
         }
+
+        // Calendar self-test. Uses only the free Google Calendar API, so it
+        // diagnoses a "Calendar unavailable" brief without regenerating one
+        // or spending any AI generation credits.
+        if case .notConfigured = viewModel.googleAuth.state {
+            EmptyView()
+        } else {
+            Button {
+                viewModel.testCalendar()
+            } label: {
+                HStack {
+                    Text("Test Calendar")
+                    if viewModel.isTestingCalendar {
+                        Spacer()
+                        ProgressView()
+                    }
+                }
+            }
+            .disabled(viewModel.isTestingCalendar)
+            if let result = viewModel.calendarTestResult {
+                Text(result)
+                    .font(.caption)
+                    .foregroundStyle(Color.inkSecondary)
+                    .textSelection(.enabled)
+            } else if let last = viewModel.lastCalendarDiagnostic {
+                Text(last)
+                    .font(.caption)
+                    .foregroundStyle(Color.inkSecondary)
+                    .textSelection(.enabled)
+            }
+        }
     }
 
     // MARK: - Briefing

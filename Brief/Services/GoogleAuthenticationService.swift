@@ -88,6 +88,35 @@ final class GoogleAuthenticationService {
         Self.isConfigured && GIDSignIn.sharedInstance.hasPreviousSignIn()
     }
 
+    /// True once a live session actually exists in *this* process. This is
+    /// the condition the Calendar fetch really depends on: `hasPreviousSession`
+    /// only reports that a sign-in exists on disk, but the token fetch needs
+    /// `currentUser`, which stays nil until `restorePreviousSession()` has
+    /// run in this launch. The gap between the two is the classic cause of a
+    /// brief reporting "Calendar unavailable" while Settings shows Connected.
+    var hasLiveSession: Bool {
+        Self.isConfigured && GIDSignIn.sharedInstance.currentUser != nil
+    }
+
+    /// A human-readable, token-free snapshot of the live Google session,
+    /// for the Settings "Test Calendar" diagnostic and generation failure
+    /// notes. Never includes an access or refresh token.
+    var sessionDiagnostic: String {
+        guard Self.isConfigured else {
+            return "OAuth client ID is not configured in Info.plist (see SETUP.md)."
+        }
+        let hasPrevious = GIDSignIn.sharedInstance.hasPreviousSignIn()
+        guard let user = GIDSignIn.sharedInstance.currentUser else {
+            return "No live session in this process (currentUser is nil); "
+                + "previous sign-in on disk: \(hasPrevious); state: \(state.displayName)."
+        }
+        let scopes = user.grantedScopes ?? []
+        let hasCalendarScope = scopes.contains(Self.calendarReadOnlyScope)
+        let email = user.profile?.email ?? "unknown account"
+        return "Live session for \(email); calendar.readonly granted: \(hasCalendarScope); "
+            + "state: \(state.displayName)."
+    }
+
     /// Restore the previous session on launch.
     func restorePreviousSession() async {
         guard Self.isConfigured else {

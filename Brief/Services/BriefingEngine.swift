@@ -422,7 +422,7 @@ final class BriefingEngine {
             markPhase("reading_calendar", .done)
             return CalendarContext(
                 available: false, todayEvents: [], weekEvents: [],
-                failureNote: "Google Calendar is not connected."
+                failureNote: "Calendar unavailable — Google is not connected. \(googleAuth.sessionDiagnostic)"
             )
         }
         do {
@@ -444,7 +444,7 @@ final class BriefingEngine {
             markPhase("reading_calendar", .failed)
             return CalendarContext(
                 available: false, todayEvents: [], weekEvents: [],
-                failureNote: "Calendar unavailable: \(error.localizedDescription)"
+                failureNote: "Calendar unavailable: \(error.localizedDescription) \(googleAuth.sessionDiagnostic)"
             )
         }
     }

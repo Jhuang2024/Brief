@@ -27,6 +27,11 @@ final class SettingsViewModel {
     var isLoadingCalendars = false
     var googleError: String?
 
+    // Calendar self-test (Google Calendar API only — never touches the paid
+    // AI provider, so running it can't burn generation credits).
+    var calendarTestResult: String?
+    var isTestingCalendar = false
+
     init(environment: AppEnvironment = .shared) {
         self.environment = environment
     }
@@ -155,6 +160,83 @@ final class SettingsViewModel {
         } catch {
             googleError = error.localizedDescription
         }
+    }
+
+    /// Reproduces exactly what generation does when it reads the calendar —
+    /// restores the session, then fetches today's events for the selected
+    /// calendars — and reports the precise outcome. This calls only the free
+    /// Google Calendar API, never the paid AI provider, so it diagnoses a
+    /// "Calendar unavailable" brief without regenerating one or spending any
+    /// generation credits.
+    func testCalendar() {
+        guard !isTestingCalendar else { return }
+        isTestingCalendar = true
+        calendarTestResult = nil
+        Task {
+            defer { isTestingCalendar = false }
+            // Match generation's precondition: ensure the previous Google
+            // session has actually been restored into this process first.
+            await environment.ensureLaunched()
+
+            var lines: [String] = [googleAuth.sessionDiagnostic]
+            let ids = preferencesStore.preferences.selectedCalendarIDs
+            lines.append(
+                "Selected calendars: "
+                    + (ids.isEmpty ? "primary (default)" : ids.joined(separator: ", "))
+            )
+
+            guard preferencesStore.preferences.includeCalendar else {
+                lines.append(
+                    "⚠️ “Include Calendar” is off in Briefing settings, so every brief "
+                        + "skips the calendar regardless of the connection."
+                )
+                calendarTestResult = lines.joined(separator: "\n")
+                return
+            }
+
+            do {
+                let calendar = Calendar.current
+                let now = Date()
+                let dayStart = calendar.startOfDay(for: now)
+                let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? now
+                let events = try await GoogleCalendarService(auth: googleAuth)
+                    .fetchEvents(calendarIDs: ids, from: dayStart, to: dayEnd)
+                lines.append("✅ Fetched \(events.count) event(s) for today — Calendar is working right now.")
+                if let last = lastCalendarDiagnostic {
+                    lines.append(last)
+                    lines.append(
+                        "Since it works now, that earlier brief most likely generated before "
+                            + "the Google session had finished restoring."
+                    )
+                }
+            } catch {
+                lines.append("❌ Fetch failed: \(error.localizedDescription)")
+            }
+            calendarTestResult = lines.joined(separator: "\n")
+        }
+    }
+
+    /// The calendar-related failure recorded for the most recent generation,
+    /// pulled from the persisted diagnostics — no regeneration required. Nil
+    /// when the last brief's calendar succeeded (or nothing has run yet).
+    var lastCalendarDiagnostic: String? {
+        guard let json = environment.engine.lastDiagnosticsJSON,
+              let data = json.data(using: .utf8)
+        else { return nil }
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let diagnostics = try? decoder.decode(GenerationDiagnostics.self, from: data)
+        else { return nil }
+        let calendarErrors = diagnostics.errors.filter {
+            $0.localizedCaseInsensitiveContains("calendar")
+        }
+        guard !calendarErrors.isEmpty else { return nil }
+        let when = diagnostics.finishedAt ?? diagnostics.startedAt
+        let formatter = DateFormatter()
+        formatter.dateStyle = .short
+        formatter.timeStyle = .short
+        return "Last brief (\(diagnostics.trigger), \(formatter.string(from: when))): "
+            + calendarErrors.joined(separator: " ")
     }
 
     func isCalendarSelected(_ calendar: GoogleCalendarInfo) -> Bool {
