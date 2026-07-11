@@ -40,6 +40,15 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             let environment = AppEnvironment.shared
             environment.selectedTab = .today
             if !isBreakingAlert {
+                // Tapping the morning reminder can cold-launch the app, so
+                // the previous Google session hasn't been restored into this
+                // process yet — GIDSignIn's currentUser is nil until
+                // ensureLaunched() runs. Without awaiting it first, this
+                // notification-triggered generation races ahead and bakes a
+                // false "Calendar unavailable" into the very brief the tap
+                // was meant to open. ensureLaunched() is memoized, so it's a
+                // no-op if Today's onAppear already ran it.
+                await environment.ensureLaunched()
                 await environment.engine.generateIfNeeded(trigger: .notification)
             }
             completionHandler()
