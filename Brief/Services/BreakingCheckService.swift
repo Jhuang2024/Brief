@@ -71,7 +71,7 @@ final class BreakingCheckService {
         let recentHeadlines = Array(Set(
             store.recentStoryMemory(days: 3, now: now).map(\.headline) +
             alertStore.recentHeadlines(days: 7, now: now)
-        )).prefix(60)
+        )).prefix(60).map { $0 }
 
         do {
             let openRouter = self.openRouter
@@ -83,7 +83,7 @@ final class BreakingCheckService {
                     systemPrompt: Self.systemPrompt,
                     userPrompt: Self.userPrompt(
                         preferences: preferences,
-                        recentHeadlines: Array(recentHeadlines),
+                        recentHeadlines: recentHeadlines,
                         now: now
                     ),
                     schemaName: "breaking_check",
@@ -118,6 +118,16 @@ final class BreakingCheckService {
                 headline: headline, sourceURL: sourceURL, entities: entities, category: "breaking"
             )
             guard !recentFingerprints.contains(fingerprint) else { return }
+
+            // The exact fingerprint above only catches an identical headline +
+            // URL + entity set. The same real-world event reworded across
+            // outlets — "Apple files lawsuit accusing OpenAI…" vs "Apple
+            // Accuses OpenAI… in Major Lawsuit", title-case vs sentence-case,
+            // a different source URL — sails right past it, which is how Jerry
+            // got pinged repeatedly about one story. This token-overlap check
+            // treats a headline that substantially restates a recent one as a
+            // duplicate and drops it silently.
+            guard !Self.isNearDuplicate(headline, of: recentHeadlines) else { return }
 
             let sourceTitle = response.sourceTitle.trimmingCharacters(in: .whitespacesAndNewlines)
             let alert = BreakingAlert(
@@ -155,6 +165,50 @@ final class BreakingCheckService {
             "billing", "rate limit", "rate-limited", "api key", "unauthorized",
         ]
         return markers.contains { lowered.contains($0) }
+    }
+
+    /// Whether `candidate` substantially restates any headline in `recent` —
+    /// i.e. the same event under different wording. Compares significant-word
+    /// sets rather than raw strings, so it is resilient to reordering,
+    /// title-case vs sentence-case, and filler words that defeat the exact
+    /// fingerprint. A pair counts as a duplicate when either the Jaccard
+    /// overlap is high or nearly all of the shorter headline's words appear
+    /// in the other (the latter catches "X sues Y" vs "X sues Y in landmark
+    /// case", where one headline is a superset of the other).
+    static func isNearDuplicate(_ candidate: String, of recent: [String]) -> Bool {
+        let candidateTokens = significantTokens(candidate)
+        guard candidateTokens.count >= 2 else { return false }
+        for headline in recent {
+            let tokens = significantTokens(headline)
+            guard tokens.count >= 2 else { continue }
+            let intersection = candidateTokens.intersection(tokens).count
+            guard intersection > 0 else { continue }
+            let union = candidateTokens.union(tokens).count
+            let smaller = min(candidateTokens.count, tokens.count)
+            if Double(intersection) / Double(union) >= 0.6
+                || Double(intersection) / Double(smaller) >= 0.8 {
+                return true
+            }
+        }
+        return false
+    }
+
+    /// Content-bearing lowercased words of a headline: alphanumeric tokens of
+    /// 3+ characters, minus common filler that carries no topic signal.
+    private static func significantTokens(_ text: String) -> Set<String> {
+        let stopWords: Set<String> = [
+            "the", "and", "for", "with", "from", "its", "are", "was", "were",
+            "has", "have", "had", "over", "amid", "into", "after", "before",
+            "says", "say", "said", "major", "new", "how", "why", "what", "who",
+            "that", "this", "will", "amid", "as", "at", "by", "in", "of", "on",
+            "or", "to", "up", "off",
+        ]
+        let normalized = Fingerprint.normalizeHeadline(text)
+        return Set(
+            normalized.split(separator: " ")
+                .map(String.init)
+                .filter { $0.count >= 3 && !stopWords.contains($0) }
+        )
     }
 
     private static func decode(_ content: String) -> BreakingCheckResponse? {
