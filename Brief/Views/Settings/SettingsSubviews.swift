@@ -160,6 +160,11 @@ struct ModelsSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 
     private static let suggestedModels = [
+        "openai/gpt-4o-mini",
+        "openai/gpt-5.1",
+        "anthropic/claude-sonnet-4.5",
+        "google/gemini-2.5-pro",
+        "perplexity/sonar-pro",
         "openai:free",
         "openai/gpt-oss-120b:free",
         "openai/gpt-oss-20b:free",
@@ -167,11 +172,6 @@ struct ModelsSettingsView: View {
         "deepseek/deepseek-chat-v3.1:free",
         "deepseek/deepseek-r1:free",
         "openrouter/auto",
-        "openai/gpt-4o-mini",
-        "anthropic/claude-sonnet-4.5",
-        "openai/gpt-5.1",
-        "google/gemini-2.5-pro",
-        "perplexity/sonar-pro",
     ]
 
     var body: some View {
@@ -180,7 +180,7 @@ struct ModelsSettingsView: View {
             Section {
                 modelField(title: "Research model", text: $store.preferences.researchModel)
             } footer: {
-                Text("Used for the web-grounded research requests. Defaults to openai:free, a Brief-specific option that stays within OpenAI's own free models (gpt-oss-120b, falling back to gpt-oss-20b) rather than pinning to one specific free model, which risks upstream rate-limiting when that particular model is oversubscribed — or OpenRouter's own auto:free, which can route to an unrelated provider entirely. Other suggestions follow OpenRouter's model-slug format (provider/model) — if you've changed the API base URL, use whatever slug that provider expects instead.")
+                Text("Used for the web-grounded research requests. Defaults to openai/gpt-4o-mini — every free/open-weight option tried here turned out unreliable in some way (upstream rate-limiting, routing to an unrelated provider, or structured output that failed to decode), so this trades a small per-generation cost for consistent results. The openai:free/:free suggestions below route to no-cost models instead, if you'd rather trade reliability back for zero cost.")
                     .foregroundStyle(Color.inkSecondary)
             }
             Section {

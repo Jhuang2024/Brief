@@ -98,20 +98,23 @@ a saved key and the first attempt fails — "use whichever one works."
      after a generation attempt: HTTP errors there usually name the
      rejected field.
 5. **Settings → Models** — research and editor models both default to
-   `openai:free`, a Brief-specific sentinel (not an OpenRouter model
-   itself) that sends OpenRouter's own `models` fallback list containing
-   only OpenAI's free/open-weight models — `openai/gpt-oss-120b:free`
-   first, falling back to `openai/gpt-oss-20b:free` if the first is
-   unavailable — so generation costs nothing and never leaves the OpenAI
-   family. This exists instead of OpenRouter's own `auto:free`/`auto`
-   routing, which is free to land on a completely unrelated provider
-   (confirmed in testing landing on `deepseek/deepseek-v4-flash`), and
-   instead of pinning to a single free model, which risks upstream
-   rate-limiting when that particular model is oversubscribed —
-   confirmed in testing, where a request failed with "openai/gpt-oss-120b:free
-   is temporarily rate-limited upstream." Pinning to one specific model
-   (OpenAI or otherwise) is still available as a suggestion in that
-   screen if you'd rather trade the fallback for predictability.
+   `openai/gpt-4o-mini`, a paid model, on purpose: every free/open-weight
+   option tried here turned out unreliable in a different way, confirmed
+   on-device across several rebuilds —
+   - `auto:free` (OpenRouter's own "any free model" routing) landed on
+     `deepseek/deepseek-v4-flash`, an unrelated provider.
+   - `openai/gpt-oss-120b:free` pinned alone got upstream-rate-limited
+     under real demand.
+   - `openai:free` (a Brief-specific sentinel that fell back between
+     `gpt-oss-120b:free` and `gpt-oss-20b:free` via OpenRouter's `models`
+     list field) repeatedly returned structured output that failed to
+     decode even after the one repair attempt.
+
+   `gpt-4o-mini` costs a small fraction of a cent per generation and has
+   solid, consistent JSON schema support — worth it for a brief that only
+   gets one shot a day. The free-tier suggestions are still available in
+   that screen (`openai:free`, `auto:free`, DeepSeek's `:free` models) if
+   you'd rather trade reliability back for zero cost.
 
 ---
 

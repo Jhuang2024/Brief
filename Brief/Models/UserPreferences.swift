@@ -203,19 +203,19 @@ struct UserPreferences: Codable, Equatable {
     var preferredProvider: AIProvider = .openRouter
     var useStructuredOutput: Bool = true
     var useWebSearchPlugin: Bool = true
-    // "openai:free" rather than a pinned model: confirmed in testing that
-    // openai/gpt-oss-120b:free alone gets upstream-rate-limited under
-    // real-world demand ("temporarily rate-limited upstream" from
-    // OpenRouter's OpenInference-hosted pool) — a specific popular free
-    // model being oversubscribed, not an account or request problem.
-    // "openai:free" is a Brief-specific sentinel (see
-    // OpenRouterService.modelFamilyFallbacks) that falls back between
-    // OpenAI's own free/open-weight models (gpt-oss-120b, then
-    // gpt-oss-20b) instead of pinning to one that may be saturated —
-    // unlike OpenRouter's own "auto:free"/"auto" routing, which is free
-    // to land on an unrelated provider such as DeepSeek.
-    var researchModel: String = "openai:free"
-    var editorModel: String = "openai:free"
+    // openai/gpt-4o-mini rather than a free model: every free/open-weight
+    // option tried here (auto:free landing on DeepSeek, a pinned
+    // gpt-oss-120b:free getting upstream-rate-limited, and finally
+    // openai:free's gpt-oss-120b/20b pair repeatedly returning structured
+    // output that failed to decode even after a repair attempt, confirmed
+    // on-device across several rebuilds) turned out too unreliable for a
+    // brief that only gets one shot a day. gpt-4o-mini costs a small
+    // fraction of a cent per generation and has solid, consistent JSON
+    // schema support — reliability was worth trading the "free" part away
+    // for. "openai:free" is still available as a manual choice in
+    // Settings → Models if cost ever matters more than reliability again.
+    var researchModel: String = "openai/gpt-4o-mini"
+    var editorModel: String = "openai/gpt-4o-mini"
     var researchDepth: ResearchDepth = .standard
 
     // Weather & location
@@ -333,23 +333,29 @@ final class PreferencesStore {
     /// the user deliberately chose themselves, so it can't clobber an
     /// intentional customization.
     ///
+    /// Every one of these was the app's own shipped default at some
+    /// point, not a manual choice, and each turned out unreliable in a
+    /// different way, confirmed on-device:
     /// - `openai/gpt-oss-120b:free`: gets upstream-rate-limited under real
-    ///   demand (confirmed in testing) when pinned alone.
+    ///   demand when pinned alone.
     /// - `auto:free`: OpenRouter's own "route to any free model" auto
-    ///   selection, which is free to land on an unrelated provider such as
-    ///   DeepSeek — confirmed in testing landing on
-    ///   deepseek/deepseek-v4-flash, not what "free" was meant to mean here.
+    ///   selection landed on deepseek/deepseek-v4-flash — not what "free"
+    ///   was meant to mean here.
+    /// - `openai:free` (gpt-oss-120b/20b fallback pair): repeatedly
+    ///   returned structured output that failed to decode even after the
+    ///   one repair attempt, across several rebuilds.
     ///
-    /// Both migrate straight to `openai:free`, Brief's own sentinel that
-    /// falls back only between OpenAI's free/open-weight models.
+    /// All three migrate straight to `openai/gpt-4o-mini` — a paid model,
+    /// but one with consistent JSON schema support and a per-generation
+    /// cost small enough not to matter for a once-a-day brief.
     private static func migratingKnownStaleModelDefaults(_ preferences: UserPreferences) -> UserPreferences {
         var preferences = preferences
-        let staleDefaults: Set<String> = ["openai/gpt-oss-120b:free", "auto:free"]
+        let staleDefaults: Set<String> = ["openai/gpt-oss-120b:free", "auto:free", "openai:free"]
         if staleDefaults.contains(preferences.researchModel) {
-            preferences.researchModel = "openai:free"
+            preferences.researchModel = "openai/gpt-4o-mini"
         }
         if staleDefaults.contains(preferences.editorModel) {
-            preferences.editorModel = "openai:free"
+            preferences.editorModel = "openai/gpt-4o-mini"
         }
         return preferences
     }
