@@ -79,6 +79,19 @@ final class BriefingEngine {
     private static let researchMaxTokens = 4000
     private static let editorMaxTokens = 8000
 
+    /// A free-tier model generating up to `editorMaxTokens` worth of
+    /// output can genuinely take a while under load — the previous fixed
+    /// 45-second timeout was tuned for a small/default-length response and
+    /// started tripping on "Editing took too long" as soon as the cap
+    /// above was raised, even though the request was still actively
+    /// producing (not stuck). These are generous enough to let a slow but
+    /// working free model finish; the live elapsed-time counters in
+    /// GenerationProgressView/TodayView's inline strip already make a
+    /// long-but-working wait visibly distinct from an actual freeze.
+    private static let researchTimeoutSeconds: TimeInterval = 60
+    private static let editorTimeoutSeconds: TimeInterval = 120
+    private static let editorRepairTimeoutSeconds: TimeInterval = 90
+
     private let store: BriefStore
     private let preferencesStore: PreferencesStore
     private let googleAuth: GoogleAuthenticationService
@@ -483,7 +496,7 @@ final class BriefingEngine {
         providerOrder: [AIProvider]
     ) async throws -> ResearchPacket {
         let preferences = context.preferences
-        let result = try await withTimeout(seconds: 45, stage: "Research") {
+        let result = try await withTimeout(seconds: Self.researchTimeoutSeconds, stage: "Research") {
             try await ProviderFallback.complete(
                 providerOrder: providerOrder,
                 openRouter: openRouter,
@@ -548,7 +561,7 @@ final class BriefingEngine {
         // instance method would be a concurrency-checking error;
         // capturing the plain-struct value directly is not.
         let openRouter = self.openRouter
-        let result = try await Self.withTimeout(seconds: 45, stage: "Editing") {
+        let result = try await Self.withTimeout(seconds: Self.editorTimeoutSeconds, stage: "Editing") {
             try await ProviderFallback.complete(
                 providerOrder: providerOrder,
                 openRouter: openRouter,
@@ -578,7 +591,7 @@ final class BriefingEngine {
         } catch {
             // One repair attempt: send the broken output and the error back.
             diagnostics.errors.append("Editor output failed to decode: \(error.localizedDescription). Attempting repair.")
-            let repair = try await Self.withTimeout(seconds: 45, stage: "Editing repair") {
+            let repair = try await Self.withTimeout(seconds: Self.editorRepairTimeoutSeconds, stage: "Editing repair") {
                 try await ProviderFallback.complete(
                     providerOrder: providerOrder,
                     openRouter: openRouter,
