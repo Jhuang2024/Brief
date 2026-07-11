@@ -590,7 +590,13 @@ final class BriefingEngine {
             return (response, result.modelUsed)
         } catch {
             // One repair attempt: send the broken output and the error back.
-            diagnostics.errors.append("Editor output failed to decode: \(error.localizedDescription). Attempting repair.")
+            // The content snippet is kept in diagnostics (never shown to
+            // the user directly) so a repeat failure is actually
+            // debuggable via Settings → Data → Export diagnostic JSON,
+            // instead of only ever seeing Swift's generic decode-error text.
+            diagnostics.errors.append(
+                "Editor output failed to decode: \(error.localizedDescription). Attempting repair. Raw content: \(Self.diagnosticSnippet(result.content))"
+            )
             let repair = try await Self.withTimeout(seconds: Self.editorRepairTimeoutSeconds, stage: "Editing repair") {
                 try await ProviderFallback.complete(
                     providerOrder: providerOrder,
@@ -622,7 +628,9 @@ final class BriefingEngine {
                 // be read because it isn't in the correct format.") reach
                 // the user verbatim. The specific decode error is still
                 // captured in diagnostics for export.
-                diagnostics.errors.append("Editor repair output also failed to decode: \(repairDecodeError.localizedDescription).")
+                diagnostics.errors.append(
+                    "Editor repair output also failed to decode: \(repairDecodeError.localizedDescription). Raw content: \(Self.diagnosticSnippet(repair.content))"
+                )
                 throw EngineError.invalidStructuredOutput(stage: "Editing")
             }
             diagnostics.steps.append(.init(
@@ -638,12 +646,22 @@ final class BriefingEngine {
         do {
             return try JSONDecoder().decode(EditorResponse.self, from: Data(json.utf8))
         } catch {
-            // Retry decoding once against the raw content before giving up.
-            return try JSONDecoder().decode(EditorResponse.self, from: Data(content.utf8))
+            // Retry decoding once against the raw content (trailing-comma
+            // repaired, but not re-sliced) before giving up.
+            return try JSONDecoder().decode(EditorResponse.self, from: Data(removeTrailingCommas(content).utf8))
         }
     }
 
-    /// Strip markdown fences and any prose around the outermost JSON object.
+    /// A short, non-secret preview of a model's raw response for
+    /// diagnostics only — never shown directly to the user, but exported
+    /// diagnostics need to show what actually came back to be debuggable.
+    private nonisolated static func diagnosticSnippet(_ content: String) -> String {
+        String(content.prefix(600))
+    }
+
+    /// Strip markdown fences and any prose around the JSON object, then
+    /// repair the single most common way a free-tier model's output still
+    /// fails to decode afterward.
     private nonisolated static func extractJSON(_ content: String) -> String {
         var text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         if text.hasPrefix("```") {
@@ -652,10 +670,55 @@ final class BriefingEngine {
                 .replacingOccurrences(of: "```", with: "")
                 .trimmingCharacters(in: .whitespacesAndNewlines)
         }
-        if let first = text.firstIndex(of: "{"), let last = text.lastIndex(of: "}"), first < last {
-            return String(text[first...last])
+        return removeTrailingCommas(balancedJSONObject(in: text) ?? text)
+    }
+
+    /// Finds the first `{` and walks forward tracking brace depth (and
+    /// string-literal state, so a `{`/`}` inside a quoted value doesn't
+    /// throw off the count) to the matching closing `}` — unlike a naive
+    /// "first `{` to last `}`" scan, this isn't fooled by a model that
+    /// ignores the "no prose" instruction and appends commentary
+    /// containing its own stray braces after the real JSON object, which
+    /// previously produced a corrupted slice that failed to decode.
+    /// Returns nil if the braces never balance (e.g. genuinely truncated
+    /// mid-object), in which case the caller falls back to the raw text.
+    private nonisolated static func balancedJSONObject(in text: String) -> String? {
+        guard let start = text.firstIndex(of: "{") else { return nil }
+        var depth = 0
+        var inString = false
+        var isEscaped = false
+        var index = start
+        while index < text.endIndex {
+            let character = text[index]
+            if isEscaped {
+                isEscaped = false
+            } else if character == "\\" {
+                isEscaped = true
+            } else if character == "\"" {
+                inString.toggle()
+            } else if !inString {
+                if character == "{" {
+                    depth += 1
+                } else if character == "}" {
+                    depth -= 1
+                    if depth == 0 {
+                        return String(text[start...index])
+                    }
+                }
+            }
+            index = text.index(after: index)
         }
-        return text
+        return nil
+    }
+
+    /// A trailing comma before a closing `}`/`]` is invalid JSON but a
+    /// common thing for a model to emit, especially free/open-weight ones
+    /// with looser structured-output support — strip it rather than let a
+    /// single stray comma fail the whole decode.
+    private nonisolated static func removeTrailingCommas(_ json: String) -> String {
+        guard let regex = try? NSRegularExpression(pattern: ",(\\s*[}\\]])") else { return json }
+        let range = NSRange(json.startIndex..., in: json)
+        return regex.stringByReplacingMatches(in: json, range: range, withTemplate: "$1")
     }
 
     // MARK: - Stage 4 + 5
