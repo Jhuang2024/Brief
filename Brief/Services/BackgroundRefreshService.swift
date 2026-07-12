@@ -2,10 +2,12 @@ import BackgroundTasks
 import Foundation
 
 /// Registers and schedules Brief's two best-effort background tasks: the
-/// morning brief pre-generation, and the hourly breaking-news check. Both
-/// are `BGAppRefreshTask`s, which iOS runs at its own discretion, not on a
-/// guaranteed schedule — neither task's absence or lateness should ever
-/// leave the app in a broken state, only a slightly stale one that the
+/// morning brief pre-generation (a `BGProcessingTask`, since a full
+/// generation needs minutes of runtime the ~30s app-refresh budget can't
+/// give), and the hourly breaking-news check (a `BGAppRefreshTask`, a single
+/// short call that fits comfortably). iOS runs both at its own discretion,
+/// not on a guaranteed schedule — neither task's absence or lateness should
+/// ever leave the app in a broken state, only a slightly stale one that the
 /// matching foreground fallback (`generateIfNeeded`, `checkIfDue`) picks
 /// up next time the app is opened.
 @MainActor
@@ -41,7 +43,7 @@ final class BackgroundRefreshService {
         ) { [weak self] task in
             // Registered on the main queue, so hopping to the main actor is safe.
             MainActor.assumeIsolated {
-                guard let self, let refreshTask = task as? BGAppRefreshTask else {
+                guard let self, let refreshTask = task as? BGProcessingTask else {
                     task.setTaskCompleted(success: false)
                     return
                 }
@@ -63,9 +65,22 @@ final class BackgroundRefreshService {
     }
 
     /// Schedule the next attempt shortly before the configured morning time.
+    ///
+    /// Uses a BGProcessingTask, not a BGAppRefreshTask. Generating a full
+    /// brief means several web-grounded LLM research calls plus editorial
+    /// synthesis — routinely far longer than the ~30 seconds an app-refresh
+    /// task is granted before iOS kills it. That short budget is why the
+    /// morning pre-generation never actually finished in the background: the
+    /// task would start, run out of time mid-generation, and get cancelled,
+    /// leaving the brief to be generated from scratch when the notification
+    /// was tapped. A processing task gets minutes of runtime and is the
+    /// right tool for work this long; iOS also tends to run it overnight
+    /// while the phone is charging, which lines up well with a morning brief.
     func scheduleNextRefresh() {
-        let request = BGAppRefreshTaskRequest(identifier: Self.refreshTaskIdentifier)
+        let request = BGProcessingTaskRequest(identifier: Self.refreshTaskIdentifier)
         request.earliestBeginDate = nextMorningRunDate()
+        request.requiresNetworkConnectivity = true
+        request.requiresExternalPower = false
         try? BGTaskScheduler.shared.submit(request)
     }
 
@@ -84,8 +99,10 @@ final class BackgroundRefreshService {
 
     private func nextMorningRunDate(now: Date = Date()) -> Date? {
         var components = preferencesStore.preferences.morningTime
-        // Aim ~30 minutes ahead of the briefing time.
-        let minutes = (components.hour ?? 7) * 60 + (components.minute ?? 30) - 30
+        // Aim ~45 minutes ahead of the briefing time, giving iOS a little
+        // more of a window to run the processing task and letting a full
+        // generation finish before the reminder fires.
+        let minutes = (components.hour ?? 7) * 60 + (components.minute ?? 30) - 45
         components.hour = max(0, minutes) / 60
         components.minute = max(0, minutes) % 60
         return Calendar.current.nextDate(
@@ -100,7 +117,7 @@ final class BackgroundRefreshService {
     /// without matching it here, a background firing later in the day
     /// could silently burn API credits regenerating a brief nobody asked
     /// to refresh.
-    private func handleRefresh(_ task: BGAppRefreshTask) {
+    private func handleRefresh(_ task: BGProcessingTask) {
         // Always keep the chain alive for tomorrow.
         scheduleNextRefresh()
 

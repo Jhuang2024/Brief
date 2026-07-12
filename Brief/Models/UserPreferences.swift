@@ -157,7 +157,7 @@ struct SectionConfiguration: Codable, Identifiable, Hashable {
 /// The OpenRouter API key lives in the Keychain, never here.
 struct UserPreferences: Codable, Equatable {
     // Briefing
-    var morningMinutesAfterMidnight: Int = 7 * 60 + 30 // 7:30 AM
+    var morningMinutesAfterMidnight: Int = 6 * 60 // 6:00 AM
     var briefLength: BriefLength = .standard
     var maxReadingMinutes: Int = 7
     var automaticRefreshEnabled: Bool = true
@@ -307,10 +307,20 @@ final class PreferencesStore {
         didSet { save() }
     }
 
+    /// Flags a one-time move of the morning brief time to 6:00 AM. Gated by
+    /// its own key rather than "rewrite whenever the value is the old 7:30
+    /// default", so that if the user later picks a different time in
+    /// Settings it sticks instead of being reset on the next launch.
+    private static let morningTimeMigrationKey = "brief.migratedMorningTimeTo6AM.v1"
+
     init() {
         if let data = UserDefaults.standard.data(forKey: Self.key),
            let decoded = Self.decodeFillingMissingKeysWithDefaults(data) {
-            let migrated = Self.migratingKnownStaleModelDefaults(decoded)
+            var migrated = Self.migratingKnownStaleModelDefaults(decoded)
+            if !UserDefaults.standard.bool(forKey: Self.morningTimeMigrationKey) {
+                migrated.morningMinutesAfterMidnight = 6 * 60
+                UserDefaults.standard.set(true, forKey: Self.morningTimeMigrationKey)
+            }
             preferences = migrated
             // didSet doesn't fire for a property's own initial-value
             // assignment in init(), so a migration wouldn't otherwise
@@ -320,6 +330,9 @@ final class PreferencesStore {
                 save()
             }
         } else {
+            // Fresh install: `.default` already carries 6:00 AM, so mark the
+            // one-time migration done to avoid re-applying it later.
+            UserDefaults.standard.set(true, forKey: Self.morningTimeMigrationKey)
             preferences = .default
         }
     }
