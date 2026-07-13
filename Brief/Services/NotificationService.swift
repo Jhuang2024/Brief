@@ -33,8 +33,10 @@ final class NotificationService {
     }
 
     /// Re-schedule the repeating morning reminder at the configured time.
-    /// The wording never claims the brief is generated — background refresh
-    /// is best-effort only.
+    /// Nothing generates the brief until this is tapped — there's no
+    /// background pre-generation to silently rely on (iOS never ran it
+    /// reliably), so the wording is explicit that opening the app is what
+    /// kicks off generation.
     func updateMorningReminder(preferences: UserPreferences) async {
         let center = UNUserNotificationCenter.current()
         center.removePendingNotificationRequests(withIdentifiers: [Self.morningReminderIdentifier])
@@ -44,7 +46,7 @@ final class NotificationService {
 
         let content = UNMutableNotificationContent()
         content.title = "Brief"
-        content.body = "Your morning brief is waiting."
+        content.body = "Your brief is ready to generate — tap to open Brief and build today's edition."
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(

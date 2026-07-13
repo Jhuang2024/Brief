@@ -9,7 +9,7 @@ import UIKit
 @Observable
 final class BriefingEngine {
     enum Trigger: String {
-        case launch, manual, background, notification
+        case launch, manual, notification
     }
 
     struct PhaseProgress: Identifiable, Equatable {

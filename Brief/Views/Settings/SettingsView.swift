@@ -55,7 +55,6 @@ struct SettingsView: View {
             await environment.notificationService.updateMorningReminder(
                 preferences: environment.preferencesStore.preferences
             )
-            environment.backgroundRefresh.scheduleNextRefresh()
         }
     }
 

@@ -20,11 +20,9 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>fetch</string>
-		<string>processing</string>
 	</array>
 	<key>BGTaskSchedulerPermittedIdentifiers</key>
 	<array>
-		<string>com.jerry.brief.refresh</string>
 		<string>com.jerry.brief.breakingcheck</string>
 	</array>
 	<key>ITSAppUsesNonExemptEncryption</key>

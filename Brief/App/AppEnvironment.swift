@@ -63,24 +63,22 @@ final class AppEnvironment {
             notificationService: notificationService
         )
         backgroundRefresh = BackgroundRefreshService(
-            engine: engine,
-            store: briefStore,
             preferencesStore: preferencesStore,
-            breakingCheckService: breakingCheck,
-            googleAuth: googleAuth
+            breakingCheckService: breakingCheck
         )
         speech = SpeechService()
     }
 
-    /// Launch-time work: restore Google, prune history, schedule
-    /// background refresh and the morning reminder. Safe to call from
-    /// multiple places (the app-level launch task and Today's onAppear
-    /// both call this) — the underlying work runs exactly once, and every
-    /// caller awaits the same completion. This matters because Today's
-    /// generation reads `googleAuth`'s connection state to decide whether
-    /// Calendar is available; without this memoized await, generation
-    /// could start before Google's previous session finished restoring
-    /// and would wrongly report Calendar as unavailable.
+    /// Launch-time work: restore Google, prune history, schedule the
+    /// breaking-check background task and the morning reminder
+    /// notification. Safe to call from multiple places (the app-level
+    /// launch task and Today's onAppear both call this) — the underlying
+    /// work runs exactly once, and every caller awaits the same
+    /// completion. This matters because Today's generation reads
+    /// `googleAuth`'s connection state to decide whether Calendar is
+    /// available; without this memoized await, generation could start
+    /// before Google's previous session finished restoring and would
+    /// wrongly report Calendar as unavailable.
     func ensureLaunched() async {
         if let launchTask {
             await launchTask.value
@@ -89,7 +87,6 @@ final class AppEnvironment {
         let task = Task {
             await briefStore.pruneOldBriefs()
             await alertStore.pruneOld()
-            backgroundRefresh.scheduleNextRefresh()
             backgroundRefresh.scheduleNextBreakingCheck()
             await googleAuth.restorePreviousSession()
             await notificationService.updateMorningReminder(preferences: preferencesStore.preferences)
