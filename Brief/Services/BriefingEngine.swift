@@ -138,10 +138,10 @@ final class BriefingEngine {
 
     /// Automatic generation happens under exactly two conditions: it's at
     /// or after the configured morning time and today's brief doesn't
-    /// exist yet (covers the background pre-generation attempt, a
-    /// notification tap — which only fires at that time — and opening
-    /// the app after it with nothing generated yet), or the caller is a
-    /// manual refresh (which goes through `generate(trigger:)` directly,
+    /// exist yet (covers the morning notification tap — which only fires
+    /// at that time — and opening the app after it with nothing generated
+    /// yet), or the caller is a manual refresh (which goes through
+    /// `generate(trigger:)` directly,
     /// bypassing this gate entirely). A brief that already exists is
     /// never auto-regenerated just because it's gotten old during the
     /// day — deliberately, so the app doesn't spend API credits on its

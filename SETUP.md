@@ -168,10 +168,11 @@ belongs there rather than in a runtime settings screen.
   a city under Settings (manual city), or the app falls back to Berkeley, CA.
 - **Notifications** — requested when the morning notification toggle is on
   (default). The reminder fires at the configured morning time (default
-  7:30 AM) and says "Your morning brief is waiting."
-- **Background App Refresh** — best-effort pre-generation before your morning
-  time. iOS decides if/when it runs; the app never depends on it and always
-  generates on launch when today's brief is missing or stale.
+  6:00 AM) and prompts you to tap it to generate today's brief — the brief
+  is never pre-generated in the background, so tapping is what starts it.
+- **Background App Refresh** — used only for the hourly breaking-news check.
+  iOS decides if/when it runs; the app never depends on it and always
+  checks on launch too.
 
 ---
 
