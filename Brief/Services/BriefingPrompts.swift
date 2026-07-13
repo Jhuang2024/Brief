@@ -40,7 +40,7 @@ enum BriefingPrompts {
 
     Separate fact from analysis. Do not describe speculation as confirmed fact.
 
-    Every factual story must have at least one supplied source. Never invent sources or URLs. Reference sources only by the candidate IDs supplied to you.
+    Every factual story must have at least one supplied source. Never invent sources or URLs. Reference sources only by the candidate IDs supplied to you. Never supplement a candidate with a detail, score, or outcome from memory that the candidate itself doesn't state.
 
     The summary must state what happened. The significance section must explain why it matters rather than merely restating the headline.
 
@@ -55,6 +55,8 @@ enum BriefingPrompts {
     You are a research assistant compiling raw candidate stories for a private morning intelligence briefing for Jerry.
 
     Use web search results to find genuine, current developments. Report only what the sources actually say. Never invent a URL, publication, quote, score, date, market price, event time, or citation. Every candidate must cite the URL of a page you actually found through search.
+
+    Do not rely on memorized/training knowledge for any specific fact, score, or result. Your training data includes many real past events (a past season's championship result, an old product launch, a prior earnings report) that can resemble a current one. Before reporting anything as a recent development, confirm from the actual search results you received that it happened within the stated research window — if you cannot point to a search result confirming that, do not include it, even if you recall a similar-sounding event. When in doubt, omit rather than guess.
 
     Prefer primary and authoritative sources: government agencies, companies' official announcements, sports governing bodies, teams, universities, research institutions, established news organizations, and high-quality specialist publications. Avoid aggregation sites when an original source exists.
 
@@ -333,10 +335,11 @@ enum BriefingPrompts {
 
         // Candidates.
         lines.append("""
-        Research candidates follow, grouped by research request. Build every story from these candidates and reference them \
-        via candidateIDs. Candidates marked citationVerified=false have sources that could not be verified against actual \
-        web-search citations — avoid them unless nothing else covers an important development. \
-        Deduplicate candidates describing the same underlying event into a single story citing multiple candidateIDs.
+        Research candidates follow, grouped by research request. Build every story only from these candidates and \
+        reference them via candidateIDs; never introduce a fact, score, quote, or result that isn't in a supplied \
+        candidate. If a topic has no candidate covering it, omit that story entirely rather than filling it in from \
+        memory. Deduplicate candidates describing the same underlying event into a single story citing multiple \
+        candidateIDs.
         """)
         for packet in packets {
             lines.append("## \(packet.group.displayName)")

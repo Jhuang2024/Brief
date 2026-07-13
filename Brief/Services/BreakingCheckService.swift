@@ -129,6 +129,19 @@ final class BreakingCheckService {
             // duplicate and drops it silently.
             guard !Self.isNearDuplicate(headline, of: recentHeadlines) else { return }
 
+            // The token-overlap check above catches the same headline
+            // reworded, but an hourly check on a still-unfolding story (an
+            // ongoing conflict, a live game, a developing scandal) tends to
+            // produce a genuinely different headline each hour — different
+            // words, same underlying topic — which sails right past a
+            // wording-based check entirely. Comparing the crude proper-noun
+            // "entities" instead (who/what the story is about, rather than
+            // how this hour's update happens to phrase it) catches that: if
+            // this headline shares most of its named entities with
+            // something already alerted on recently, treat it as the same
+            // ongoing story rather than pinging Jerry again.
+            guard !Self.isSameOngoingStory(headline, of: recentHeadlines) else { return }
+
             let sourceTitle = response.sourceTitle.trimmingCharacters(in: .whitespacesAndNewlines)
             let alert = BreakingAlert(
                 fingerprint: fingerprint,
@@ -193,6 +206,27 @@ final class BreakingCheckService {
         return false
     }
 
+    /// Whether `candidate` is about the same ongoing story as any recent
+    /// headline, judged by shared named entities rather than shared
+    /// wording. Requires at least 2 shared entities, and that they cover
+    /// most of the smaller headline's entity set, so two unrelated stories
+    /// that merely mention one common name (e.g. both involve "Trump")
+    /// don't collide.
+    static func isSameOngoingStory(_ candidate: String, of recent: [String]) -> Bool {
+        let candidateEntities = Set(Fingerprint.entities(from: candidate).map { $0.lowercased() })
+        guard candidateEntities.count >= 2 else { return false }
+        for headline in recent {
+            let entities = Set(Fingerprint.entities(from: headline).map { $0.lowercased() })
+            guard entities.count >= 2 else { continue }
+            let shared = candidateEntities.intersection(entities).count
+            guard shared >= 2 else { continue }
+            if Double(shared) / Double(min(candidateEntities.count, entities.count)) >= 0.5 {
+                return true
+            }
+        }
+        return false
+    }
+
     /// Content-bearing lowercased words of a headline: alphanumeric tokens of
     /// 3+ characters, minus common filler that carries no topic signal.
     private static func significantTokens(_ text: String) -> Set<String> {
@@ -238,6 +272,8 @@ final class BreakingCheckService {
     Your only job is to decide whether something has happened recently that is so urgent or significant Jerry would want to be interrupted with a push notification right now, rather than wait to read about it in tomorrow's brief.
 
     The bar is very high. This is NOT another briefing. In the overwhelming majority of checks, nothing qualifies, and you must return hasAlert: false with every other field left as an empty string. Only return hasAlert: true for something like a major confirmed high-impact development directly and specifically relevant to Jerry's stated interests below: think market-moving news, a materially important announcement from a company or person Jerry follows, or a globally significant event. Never alert for routine updates, incremental news, rumors, minor score changes, opinion pieces, or anything that can just as easily wait for the regular brief.
+
+    For an ongoing story you've likely already alerted on in a previous hourly check (a developing conflict, a live game, an unfolding scandal), do not send another alert just because there's a new incremental development or the story has moved forward a bit — that produces a stream of pings about "the same topic" that Jerry has explicitly said is unwanted. Once something has cleared the bar once, only alert again for that same story if it reaches a genuinely new, distinct threshold of its own (e.g. the conflict result is now final, not just that another hour of it happened).
 
     Never invent a headline, source, or URL. Any alert must cite a real URL you found through web search.
 

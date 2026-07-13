@@ -40,14 +40,32 @@ enum URLValidation {
     }
 
     /// True when `candidate` matches one of the cited URLs, compared canonically
-    /// or by domain + significant path overlap.
+    /// or by domain + significant path overlap. Domain alone is deliberately
+    /// NOT enough: a model can fabricate a plausible-looking article on a
+    /// domain that genuinely was cited for a completely different, unrelated
+    /// (and possibly stale, memorized-from-training) story. Requiring the
+    /// last meaningful path segment to also match means the candidate has to
+    /// point at the same article the search actually returned, not just the
+    /// same publication.
     static func matchesCitations(_ candidate: String, citations: [String]) -> Bool {
         let canonical = canonicalize(candidate)
         let candidateDomain = domain(of: candidate)
+        let candidateSlug = significantPathSegment(of: candidate)
         for cited in citations {
             if canonicalize(cited) == canonical { return true }
-            if !candidateDomain.isEmpty && domain(of: cited) == candidateDomain { return true }
+            if !candidateDomain.isEmpty, domain(of: cited) == candidateDomain,
+               let candidateSlug, candidateSlug == significantPathSegment(of: cited) {
+                return true
+            }
         }
         return false
+    }
+
+    /// Last non-empty path component, a proxy for "which article" on a
+    /// domain. Nil for a bare domain/root URL, which never counts as a
+    /// meaningful match on its own.
+    private static func significantPathSegment(of urlString: String) -> String? {
+        guard let url = URL(string: urlString) else { return nil }
+        return url.pathComponents.filter { $0 != "/" && !$0.isEmpty }.last
     }
 }

@@ -518,6 +518,7 @@ final class BriefingEngine {
         )
         let citedURLs = result.citations.map(\.url)
         let excludedDomains = Set(preferences.excludedDomains.map { $0.lowercased() })
+        let webSearchActive = preferences.useWebSearchPlugin
 
         // Normalize and validate every candidate URL against the citation
         // annotations OpenRouter actually returned.
@@ -528,9 +529,21 @@ final class BriefingEngine {
             guard !excludedDomains.contains(domain) else { return nil }
             candidate.sourceDomain = domain
             candidate.id = "\(group.rawValue):\(candidate.id)"
-            candidate.citationVerified = URLValidation.matchesCitations(
-                candidate.sourceURL, citations: citedURLs
-            )
+            let verified = URLValidation.matchesCitations(candidate.sourceURL, citations: citedURLs)
+            candidate.citationVerified = verified
+            // When web search actually ran, a candidate whose URL matches
+            // none of the real citations almost certainly wasn't found
+            // through search at all — it's fabricated, often a stale,
+            // well-known past event recalled from training data and
+            // dressed up with a fake recent date. Drop it outright rather
+            // than forwarding it to the editor as a fallback option; the
+            // editor previously used unverified candidates whenever no
+            // verified one covered a topic, which is exactly the loophole
+            // that let hallucinated "results" through. When web search is
+            // off there's nothing to verify against (citedURLs is always
+            // empty), so skip this filter entirely in that mode instead of
+            // dropping every candidate.
+            if webSearchActive && !verified { return nil }
             return candidate
         }
 
