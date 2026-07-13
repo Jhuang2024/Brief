@@ -15,7 +15,7 @@ struct SectionsSettingsView: View {
                     move(store: $store, from: source, to: destination)
                 }
             } footer: {
-                Text("Limits are maximums, not quotas — a section with nothing worthwhile is omitted. Drag to reorder.")
+                Text("Limits are maximums, not quotas. A section with nothing worthwhile is omitted. Drag to reorder.")
                     .foregroundStyle(Color.inkSecondary)
             }
         }
@@ -23,6 +23,7 @@ struct SectionsSettingsView: View {
         .navigationTitle("Sections")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar { EditButton() }
+        .keyboardDoneButton()
     }
 
     private func sortedIndices(of sections: [SectionConfiguration]) -> [Int] {
@@ -180,7 +181,7 @@ struct ModelsSettingsView: View {
             Section {
                 modelField(title: "Research model", text: $store.preferences.researchModel)
             } footer: {
-                Text("Used for the web-grounded research requests. Defaults to openai/gpt-4o-mini — every free/open-weight option tried here turned out unreliable in some way (upstream rate-limiting, routing to an unrelated provider, or structured output that failed to decode), so this trades a small per-generation cost for consistent results. The openai:free/:free suggestions below route to no-cost models instead, if you'd rather trade reliability back for zero cost.")
+                Text("Used for the web-grounded research requests. Defaults to openai/gpt-4o-mini: every free/open-weight option tried here turned out unreliable in some way (upstream rate-limiting, routing to an unrelated provider, or structured output that failed to decode), so this trades a small per-generation cost for consistent results. The openai:free/:free suggestions below route to no-cost models instead, if you'd rather trade reliability back for zero cost.")
                     .foregroundStyle(Color.inkSecondary)
             }
             Section {
@@ -203,6 +204,7 @@ struct ModelsSettingsView: View {
         .briefFormStyle()
         .navigationTitle("Models")
         .navigationBarTitleDisplayMode(.inline)
+        .keyboardDoneButton()
     }
 
     private func modelField(title: String, text: Binding<String>) -> some View {

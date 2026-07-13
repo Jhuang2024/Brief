@@ -35,7 +35,7 @@ final class BriefingEngine {
             case .timedOut(let stage):
                 return "\(stage) took too long and was stopped. The previous briefing was kept."
             case .invalidStructuredOutput(let stage):
-                return "\(stage) returned a response in the wrong format, even after one retry. This is usually a free-tier model hiccup — try refreshing again, or pin a specific model in Settings → Models. The previous briefing was kept."
+                return "\(stage) returned a response in the wrong format, even after one retry. This is usually a free-tier model hiccup: try refreshing again, or pin a specific model in Settings → Models. The previous briefing was kept."
             }
         }
     }
@@ -422,7 +422,7 @@ final class BriefingEngine {
             markPhase("reading_calendar", .done)
             return CalendarContext(
                 available: false, todayEvents: [], weekEvents: [],
-                failureNote: "Calendar unavailable — Google is not connected. \(googleAuth.sessionDiagnostic)"
+                failureNote: "Calendar unavailable: Google is not connected. \(googleAuth.sessionDiagnostic)"
             )
         }
         do {

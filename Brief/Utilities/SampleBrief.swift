@@ -41,7 +41,7 @@ enum SampleBrief {
                 start: at(10), end: at(11, 30), location: "Dwinelle 155", isAllDay: false
             ),
             CalendarEvent(
-                id: "sample-2", calendarID: "primary", title: "Office hours — ML project",
+                id: "sample-2", calendarID: "primary", title: "Office hours: ML project",
                 start: at(14), end: at(15), location: "Soda 405", isAllDay: false
             ),
             CalendarEvent(
@@ -111,7 +111,7 @@ enum SampleBrief {
             story(
                 "Anthropic publishes interpretability results for production-scale models",
                 "The company released research tracing safety-relevant features in a frontier model, together with tooling it says it now runs on production systems. The paper and code went out overnight.",
-                "If feature-level auditing works at production scale, it changes what regulators can reasonably ask of frontier labs — and gives safety teams a concrete artifact to standardize around.",
+                "If feature-level auditing works at production scale, it changes what regulators can reasonably ask of frontier labs, and gives safety teams a concrete artifact to standardize around.",
                 context: "This extends the dictionary-learning line of work from 2024–25. The notable claim is operational use, not just a lab demo.",
                 status: .official, importance: 0.9, order: 0,
                 sources: [source("Interpretability at scale", "anthropic.com", "research/interpretability-scale")],
@@ -143,7 +143,7 @@ enum SampleBrief {
             story(
                 "Moffitt Library extends hours through finals prep week",
                 "The library announced 24-hour access starting Monday, with the main stacks unaffected. Card access applies after 10 PM.",
-                "Useful if the ML project runs long — it's the closest 24-hour study space to north side this month.",
+                "Useful if the ML project runs long. It's the closest 24-hour study space to north side this month.",
                 status: .official, importance: 0.5, order: 0,
                 sources: [source("Moffitt hours notice", "berkeley.edu", "library/moffitt-hours")],
                 category: "berkeley"
@@ -157,7 +157,7 @@ enum SampleBrief {
             locationName: "Berkeley, CA",
             overviewItems: [
                 "A quiet overnight globally, with one exception: the EU–Indonesia trade agreement finally closed after ten years, and ratification now moves to parliaments this fall.",
-                "In AI, Anthropic's interpretability release is the story that matters — it claims production-scale feature auditing, which shifts the safety-regulation conversation from theory to tooling.",
+                "In AI, Anthropic's interpretability release is the story that matters. It claims production-scale feature auditing, which shifts the safety-regulation conversation from theory to tooling.",
                 "Nvidia says data-centre GPU lead times are under three months; cheaper, faster compute access ripples through every startup budget you follow.",
                 "F1 is back this weekend at Silverstone. Practice starts Friday early morning Pacific time, and Piastri defends a 14-point lead.",
                 "Your day: CS 189 at 10, office hours at 2, and the problem set is due tonight. Cool morning, warmer afternoon, no rain expected.",

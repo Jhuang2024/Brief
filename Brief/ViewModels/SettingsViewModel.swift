@@ -201,7 +201,7 @@ final class SettingsViewModel {
                 let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) ?? now
                 let events = try await GoogleCalendarService(auth: googleAuth)
                     .fetchEvents(calendarIDs: ids, from: dayStart, to: dayEnd)
-                lines.append("✅ Fetched \(events.count) event(s) for today — Calendar is working right now.")
+                lines.append("✅ Fetched \(events.count) event(s) for today. Calendar is working right now.")
                 if let last = lastCalendarDiagnostic {
                     lines.append(last)
                     lines.append(
@@ -263,7 +263,7 @@ final class SettingsViewModel {
     var locationStatusDescription: String {
         switch environment.locationService.authorizationStatus {
         case .authorizedWhenInUse, .authorizedAlways: return "Allowed"
-        case .denied, .restricted: return "Denied — using fallback city"
+        case .denied, .restricted: return "Denied: using fallback city"
         case .notDetermined: return "Not requested yet"
         @unknown default: return "Unknown"
         }

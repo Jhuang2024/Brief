@@ -47,7 +47,7 @@ struct WeatherSnapshot: Codable, Hashable {
         case 85, 86: return "Snow showers"
         case 95: return "Thunderstorm"
         case 96, 99: return "Thunderstorm with hail"
-        default: return "—"
+        default: return "Unknown"
         }
     }
 

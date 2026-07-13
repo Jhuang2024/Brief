@@ -46,7 +46,7 @@ final class NotificationService {
 
         let content = UNMutableNotificationContent()
         content.title = "Brief"
-        content.body = "Your brief is ready to generate — tap to open Brief and build today's edition."
+        content.body = "Your brief is ready to generate. Tap to open Brief and build today's edition."
         content.sound = .default
 
         let trigger = UNCalendarNotificationTrigger(

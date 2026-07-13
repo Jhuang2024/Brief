@@ -104,7 +104,7 @@ struct SettingsView: View {
                 Text("Google Calendar isn't set up yet.")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(Color.ink)
-                Text("An iOS OAuth client ID has to be added to Info.plist before the app can connect — this is a one-time step, not something you enter here. See SETUP.md for the five-minute Google Cloud walkthrough.")
+                Text("An iOS OAuth client ID has to be added to Info.plist before the app can connect. This is a one-time step, not something you enter here. See SETUP.md for the five-minute Google Cloud walkthrough.")
                     .font(.caption)
                     .foregroundStyle(Color.inkSecondary)
             }
@@ -184,7 +184,7 @@ struct SettingsView: View {
         } header: {
             FormSectionHeader(title: "Briefing")
         } footer: {
-            Text("The brief only generates automatically at the morning time above, or when you tap refresh — never in between, even if it gets old during the day. This keeps API usage predictable.")
+            Text("The brief only generates automatically at the morning time above, or when you tap refresh, never in between, even if it gets old during the day. This keeps API usage predictable.")
                 .foregroundStyle(Color.inkSecondary)
         }
     }
@@ -195,7 +195,7 @@ struct SettingsView: View {
         } header: {
             FormSectionHeader(title: "Breaking Alerts")
         } footer: {
-            Text("Roughly once an hour, a single small check looks for news urgent enough to interrupt your day — a very high bar, deliberately not another brief. Most hours find nothing and cost nothing. When something does qualify, it's saved here and you get a notification; otherwise you hear nothing at all.")
+            Text("Roughly once an hour, a single small check looks for news urgent enough to interrupt your day, a very high bar, deliberately not another brief. Most hours find nothing and cost nothing. When something does qualify, it's saved here and you get a notification; otherwise you hear nothing at all.")
                 .foregroundStyle(Color.inkSecondary)
         }
     }
@@ -333,13 +333,14 @@ struct AIProviderView: View {
             } header: {
                 FormSectionHeader(title: "Request Shape")
             } footer: {
-                Text("Both are OpenRouter-style extensions to the chat completions request that Bazaarlink also appears to support. Turn either off if a request is being rejected because of it — Brief falls back to asking for JSON in plain language when structured output is off, and research simply won't be web-grounded when the search plugin is off. Applies to whichever provider ends up handling the request.")
+                Text("Both are OpenRouter-style extensions to the chat completions request that Bazaarlink also appears to support. Turn either off if a request is being rejected because of it. Brief falls back to asking for JSON in plain language when structured output is off, and research simply won't be web-grounded when the search plugin is off. Applies to whichever provider ends up handling the request.")
                     .foregroundStyle(Color.inkSecondary)
             }
         }
         .briefFormStyle()
         .navigationTitle("AI Provider")
         .navigationBarTitleDisplayMode(.inline)
+        .keyboardDoneButton()
     }
 
     private func providerSection(_ provider: AIProvider) -> some View {
@@ -378,7 +379,7 @@ struct AIProviderView: View {
         } header: {
             FormSectionHeader(title: provider.displayName)
         } footer: {
-            Text("\(provider.baseURL.absoluteString) — stored in the iOS Keychain, not in the app's files, and only ever sent to this provider.")
+            Text("\(provider.baseURL.absoluteString): stored in the iOS Keychain, not in the app's files, and only ever sent to this provider.")
                 .foregroundStyle(Color.inkSecondary)
         }
     }

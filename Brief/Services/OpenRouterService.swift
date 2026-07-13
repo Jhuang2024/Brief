@@ -230,7 +230,7 @@ struct OpenRouterService {
         else {
             throw OpenRouterError.invalidResponse
         }
-        return "Connected — \(decoded.model ?? model) responded."
+        return "Connected: \(decoded.model ?? model) responded."
     }
 
     /// Sends `request`, retrying on 429 (rate limited) or 5xx (transient
@@ -288,7 +288,7 @@ struct OpenRouterService {
     /// upstream's own error text) and `provider_name` (which upstream was
     /// used). Surfacing those turns an opaque "Provider returned error"
     /// into something like "Provider returned error (provider: Example
-    /// Inference Co) — rate limit exceeded", which actually says what
+    /// Inference Co) (rate limit exceeded)", which actually says what
     /// happened.
     private static func errorMessage(from data: Data) -> String {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
@@ -308,12 +308,12 @@ struct OpenRouterService {
                     parts.append("(provider: \(providerName))")
                 }
                 if let raw = metadata["raw"] as? String, !raw.isEmpty {
-                    parts.append("— \(raw.prefix(200))")
+                    parts.append("(\(raw.prefix(200)))")
                 } else if let rawObject = metadata["raw"] as? [String: Any] {
                     if let nestedMessage = (rawObject["error"] as? [String: Any])?["message"] as? String {
-                        parts.append("— \(nestedMessage)")
+                        parts.append("(\(nestedMessage))")
                     } else if let nestedMessage = rawObject["message"] as? String {
-                        parts.append("— \(nestedMessage)")
+                        parts.append("(\(nestedMessage))")
                     }
                 }
             }

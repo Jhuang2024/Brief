@@ -119,6 +119,7 @@ struct EditableListView: View {
         .briefFormStyle()
         .navigationTitle(title)
         .toolbar { EditButton() }
+        .keyboardDoneButton()
     }
 
     private func add() {

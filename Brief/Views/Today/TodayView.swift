@@ -152,7 +152,7 @@ struct TodayView: View {
 
     private func updateFailedBanner(_ error: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("The update failed — showing the last briefing.")
+            Text("The update failed, showing the last briefing.")
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(Color.ink)
             Text(error)

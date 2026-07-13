@@ -20,7 +20,7 @@ final class GoogleAuthenticationService {
             switch self {
             case .notConfigured: return "Not set up"
             case .disconnected: return "Disconnected"
-            case .connected(let email): return "Connected — \(email)"
+            case .connected(let email): return "Connected: \(email)"
             case .tokenExpired: return "Token expired"
             case .missingScope: return "Permission missing"
             }
@@ -39,7 +39,7 @@ final class GoogleAuthenticationService {
             case .missingScope: return "Calendar permission was not granted."
             case .noPresentingViewController: return "Could not present the Google sign-in screen."
             case .notConfigured:
-                return "Google Calendar isn't set up yet. Add your OAuth client ID and URL scheme to Info.plist — see SETUP.md."
+                return "Google Calendar isn't set up yet. Add your OAuth client ID and URL scheme to Info.plist. See SETUP.md."
             }
         }
     }
