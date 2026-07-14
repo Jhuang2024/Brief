@@ -145,22 +145,28 @@ struct LinkedAppsService {
         return ("Yesterday", [])
     }
 
-    /// Reminders worth showing this morning: everything the source app
-    /// flagged overdue, plus anything due on the briefing day itself.
+    /// Reminders worth showing this morning: everything overdue, plus
+    /// anything due on the briefing day itself. Overdue is recomputed here
+    /// rather than trusted from the feed alone, because the feed's flag was
+    /// evaluated at write time, usually the evening before: a reminder that
+    /// was merely "due today" when the app last wrote its feed is overdue
+    /// by this morning, and trusting the stale flag would drop it entirely.
     /// Overdue first, then by due time; deterministic tiebreak on id.
     private static func pickReminders(
         from reminders: [LinkedAppFeed.Reminder], now: Date, calendar: Calendar
     ) -> [LinkedAppReminder] {
+        let dayStart = calendar.startOfDay(for: now)
         let picked = reminders.compactMap { reminder -> LinkedAppReminder? in
             guard !reminder.title.isEmpty, let dueDate = reminder.dueDate else { return nil }
-            guard reminder.overdue || calendar.isDate(dueDate, inSameDayAs: now) else { return nil }
+            let overdue = reminder.overdue || dueDate < dayStart
+            guard overdue || calendar.isDate(dueDate, inSameDayAs: now) else { return nil }
             return LinkedAppReminder(
                 id: reminder.id,
                 title: reminder.title,
                 detail: reminder.detail?.isEmpty == true ? nil : reminder.detail,
                 dueDate: dueDate,
                 isAllDay: reminder.isAllDay,
-                overdue: reminder.overdue
+                overdue: overdue
             )
         }
         return picked
