@@ -7,6 +7,17 @@ struct SettingsView: View {
     @State private var viewModel = SettingsViewModel()
     @State private var confirmDeleteAll = false
     @State private var confirmReset = false
+    @State private var isBackingUp = false
+    @State private var backupResult: String?
+    /// Cached on appear instead of calling into BackupService from `body`:
+    /// listing backups reads the index file (and checks the App Group
+    /// container), and re-doing that on every keystroke anywhere in
+    /// Settings would be wasted I/O. Two separate stats on purpose:
+    /// "latest" is when a backup last happened; "most complete" is the one
+    /// worth restoring after a wipe, which can be older (see
+    /// BackupService.mostRecentBackup for why they can permanently differ).
+    @State private var cachedMostRecentBackup: BackupService.BackupInfo?
+    @State private var cachedMostCompleteBackup: BackupService.BackupInfo?
 
     var body: some View {
         @Bindable var store = environment.preferencesStore
@@ -17,6 +28,7 @@ struct SettingsView: View {
                 breakingAlertsSection(store: $store)
                 listsSection
                 appearanceSection(store: $store)
+                backupsSection
                 dataSection
             }
             .briefFormStyle()
@@ -24,6 +36,7 @@ struct SettingsView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .navigationTitle("Settings")
             .task {
+                refreshBackupStats()
                 await environment.notificationService.refreshAuthorizationStatus()
                 if viewModel.googleAuth.isConnected {
                     await viewModel.loadCalendarList()
@@ -249,6 +262,76 @@ struct SettingsView: View {
         } header: {
             FormSectionHeader(title: "Appearance")
         }
+    }
+
+    // MARK: - Backups
+
+    /// Local backups, separate from the destructive actions in Data below:
+    /// automatic snapshots of the briefing history, alerts, and preferences
+    /// (never API keys), rotated locally and mirrored to the shared App
+    /// Group container so they survive app updates and reinstalls. Same
+    /// design as LockedInFit's backups.
+    private var backupsSection: some View {
+        Section {
+            Button {
+                isBackingUp = true
+                Task {
+                    let saved = await BackupService.backupNowManually(
+                        container: environment.modelContainer
+                    ) != nil
+                    backupResult = saved
+                        ? "Backup saved just now."
+                        : "A backup was already running; try again in a moment."
+                    refreshBackupStats()
+                    isBackingUp = false
+                    Haptics.tick()
+                }
+            } label: {
+                if isBackingUp {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("Backing up…")
+                    }
+                } else {
+                    Text("Back up now")
+                }
+            }
+            .disabled(isBackingUp)
+
+            NavigationLink {
+                BackupRestoreListView()
+            } label: {
+                Text("Restore from backup")
+            }
+
+            if let mostRecent = cachedMostRecentBackup {
+                LabeledContent(
+                    "Latest backup",
+                    value: mostRecent.date.formatted(date: .abbreviated, time: .shortened)
+                )
+            }
+            if let mostComplete = cachedMostCompleteBackup {
+                LabeledContent(
+                    "Most complete",
+                    value: "\(mostComplete.recordCount) records · \(mostComplete.date.formatted(date: .abbreviated, time: .omitted))"
+                )
+            }
+            if let backupResult {
+                Text(backupResult)
+                    .font(.caption)
+                    .foregroundStyle(Color.inkSecondary)
+            }
+        } header: {
+            FormSectionHeader(title: "Backups")
+        } footer: {
+            Text("Backups are taken automatically after each new brief and whenever the app goes to the background — the last \(BackupService.maxBackupsKept) are kept, plus the most complete one, and each is mirrored to the shared App Group container so it survives app updates and reinstalls. They cover your briefing history, alerts, and preferences; API keys stay in the Keychain and are never in a backup.")
+                .foregroundStyle(Color.inkSecondary)
+        }
+    }
+
+    private func refreshBackupStats() {
+        cachedMostRecentBackup = BackupService.mostRecentBackup()
+        cachedMostCompleteBackup = BackupService.mostCompleteBackup()
     }
 
     // MARK: - Data

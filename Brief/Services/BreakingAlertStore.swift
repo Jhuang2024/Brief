@@ -49,6 +49,7 @@ final class BreakingAlertStore {
     func save(_ alert: BreakingAlert) {
         context.insert(alert)
         try? context.save()
+        BackupService.scheduleBackupSoon(container: container)
     }
 
     /// Mutates rather than deletes — safe even if a view is currently

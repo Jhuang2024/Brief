@@ -387,6 +387,27 @@ final class PreferencesStore {
         preferences = .default
     }
 
+    /// The saved preferences blob exactly as persisted, for BackupService
+    /// archives. Like the live copy, it never contains API keys (those are
+    /// Keychain-only). nonisolated because backups build off the main actor
+    /// and UserDefaults is thread-safe.
+    nonisolated static func encodedPreferences() -> Data? {
+        UserDefaults.standard.data(forKey: key)
+    }
+
+    /// Applies preferences from a backup archive, with the same
+    /// missing-keys merge and stale-model migration a normal launch decode
+    /// gets. Only meaningful as an explicit, user-confirmed recovery;
+    /// BackupService calls this solely when the current preferences are
+    /// still factory-default, so a restore can never clobber settings the
+    /// user has since customized.
+    @discardableResult
+    func replacePreferences(withBackupData data: Data) -> Bool {
+        guard let decoded = Self.decodeFillingMissingKeysWithDefaults(data) else { return false }
+        preferences = Self.migratingKnownStaleModelDefaults(decoded)
+        return true
+    }
+
     /// Plain `Codable` synthesis does not apply a stored property's
     /// default value to a key missing from the decoded JSON — it just
     /// fails to decode. Since every new preference added over time is a

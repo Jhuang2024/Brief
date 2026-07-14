@@ -383,6 +383,9 @@ final class BriefingEngine {
         }
 
         store.save(brief)
+        // A new brief is the main data mutation this app ever makes; let
+        // the debounced backup capture it.
+        BackupService.scheduleBackupSoon(container: store.container)
         markPhase("finishing", .done)
 
         diagnostics.finishedAt = Date()
