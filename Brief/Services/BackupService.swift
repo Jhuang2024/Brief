@@ -1,5 +1,6 @@
 import CryptoKit
 import Foundation
+import os
 import SwiftData
 import UIKit
 
@@ -32,6 +33,11 @@ import UIKit
 /// against a genuine uninstall, which wipes the sandbox, backups included.
 /// That's what the App Group mirrors are for — they live in the shared
 /// container, which has its own lifecycle and survives updates/reinstalls.
+///
+/// Recovery is automatic as well as manual: when a launch finds the store
+/// completely empty but a non-empty backup is known, the most complete one
+/// is restored without waiting for the user to visit the Settings restore
+/// picker (see `restoreAutomaticallyIfStoreEmpty`).
 enum BackupService {
     static let maxBackupsKept = 10
     /// Automatic backups never run more often than this, no matter how many
@@ -40,6 +46,9 @@ enum BackupService {
     static let minimumAutomaticInterval: TimeInterval = 5 * 60
     fileprivate static let lastAutomaticBackupKey = "brief.lastAutomaticBackupDate"
     private static let lastBackupHashKey = "brief.lastBackupContentHash"
+    private static let autoRestoreSuppressedKey = "brief.autoRestoreSuppressed"
+
+    private static let logger = Logger(subsystem: "com.jerry.brief", category: "BackupService")
 
     struct BackupInfo: Identifiable {
         enum Location {
@@ -382,6 +391,13 @@ enum BackupService {
         if let hash {
             UserDefaults.standard.set(hash, forKey: lastBackupHashKey)
         }
+        // Data exists again and is captured: if auto-restore was suppressed
+        // (intentional delete, or a fruitless earlier restore), an empty
+        // store at the NEXT launch would once more mean lost data, so the
+        // suppression must lift now.
+        if archive.totalRecordCount > 0 {
+            UserDefaults.standard.removeObject(forKey: autoRestoreSuppressedKey)
+        }
         return (destination, true)
     }
 
@@ -447,6 +463,56 @@ enum BackupService {
     /// which would make a "Back Up Now" tap look like it did nothing.
     static func mostRecentBackup() -> BackupInfo? {
         (listBackups() + appGroupMirrorBackups()).max { $0.date < $1.date }
+    }
+
+    // MARK: - Launch auto-restore
+
+    /// Launch-time recovery: when the store opens with no data at all but a
+    /// non-empty backup is known (the local rotation, or an App Group mirror
+    /// that survived an update/reinstall), restore the most complete one
+    /// automatically instead of waiting for the user to discover the
+    /// Settings restore picker. "Most complete" rather than "newest" for the
+    /// same reason the restore picker sorts that way: after a wipe, the
+    /// newest backup is often a snapshot of the nearly-empty post-wipe
+    /// state, while the one that matters is the most complete one.
+    ///
+    /// Runs on the main actor against the main context — same as a manual
+    /// restore — so the recovered records are already visible when the first
+    /// screen renders and before today's generation looks at history.
+    /// Returns true when records were actually restored.
+    @MainActor
+    @discardableResult
+    static func restoreAutomaticallyIfStoreEmpty(
+        container: ModelContainer,
+        preferencesStore: PreferencesStore
+    ) -> Bool {
+        let context = container.mainContext
+        guard currentRecordCount(context: context) == 0 else { return false }
+        guard !UserDefaults.standard.bool(forKey: autoRestoreSuppressedKey) else { return false }
+        guard let best = allKnownBackups().first, best.recordCount > 0 else { return false }
+
+        switch restore(from: best, context: context, preferencesStore: preferencesStore, currentRecordCount: 0) {
+        case .restored(let count, let preferencesApplied):
+            logger.notice("Store was empty at launch; auto-restored \(count) record(s) from the \(best.date.description, privacy: .public) backup (preferences applied: \(preferencesApplied)).")
+            return true
+        case .emptyBackupSkipped:
+            return false
+        case .failed(let error):
+            logger.error("Store was empty at launch but auto-restore failed: \(error.localizedDescription, privacy: .public)")
+            return false
+        }
+    }
+
+    /// Suppresses the launch auto-restore until a backup with records is
+    /// written again. Two callers, one meaning each: the user intentionally
+    /// deleted everything (auto-restore would resurrect what they just
+    /// erased), or an auto-restore recovered only records old enough that
+    /// pruning removed them right back out (retrying every launch would
+    /// loop forever). Either way, the suppression lifts on the next real
+    /// backup write — from that point on, an empty store at launch means
+    /// data was lost, not absent on purpose.
+    static func suppressAutoRestore() {
+        UserDefaults.standard.set(true, forKey: autoRestoreSuppressedKey)
     }
 
     // MARK: - Restore

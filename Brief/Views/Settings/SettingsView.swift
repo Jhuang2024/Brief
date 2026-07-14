@@ -358,7 +358,7 @@ struct SettingsView: View {
         } header: {
             FormSectionHeader(title: "Backups")
         } footer: {
-            Text("Backups are taken automatically after each new brief and whenever the app goes to the background — the last \(BackupService.maxBackupsKept) are kept, plus the most complete one, and each is mirrored to the shared App Group container so it survives app updates and reinstalls. They cover your briefing history, alerts, and preferences; API keys stay in the Keychain and are never in a backup.")
+            Text("Backups are taken automatically after each new brief and whenever the app goes to the background — the last \(BackupService.maxBackupsKept) are kept, plus the most complete one, and each is mirrored to the shared App Group container so it survives app updates and reinstalls. If the app ever launches and finds its data missing, the most complete backup is restored automatically. Backups cover your briefing history, alerts, and preferences; API keys stay in the Keychain and are never in a backup.")
                 .foregroundStyle(Color.inkSecondary)
         }
     }

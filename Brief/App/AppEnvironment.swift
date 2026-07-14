@@ -90,8 +90,26 @@ final class AppEnvironment {
             return
         }
         let task = Task {
+            // If the container came up empty (an update or reinstall wiped
+            // the sandbox) but a backup survived, put the data back before
+            // anything reads the store — pruning, today's generation, and
+            // the first render all see the recovered history.
+            let autoRestored = BackupService.restoreAutomaticallyIfStoreEmpty(
+                container: modelContainer,
+                preferencesStore: preferencesStore
+            )
             await briefStore.pruneOldBriefs()
             await alertStore.pruneOld()
+            if autoRestored {
+                if BackupService.currentRecordCount(context: modelContainer.mainContext) == 0 {
+                    // Everything the backup held was already past retention
+                    // and pruned right back out. Suppress until new data is
+                    // backed up, so launch doesn't loop restore-then-prune.
+                    BackupService.suppressAutoRestore()
+                } else {
+                    BackupService.scheduleBackupSoon(container: modelContainer)
+                }
+            }
             backgroundRefresh.scheduleNextBreakingCheck()
             await googleAuth.restorePreviousSession()
             await notificationService.updateMorningReminder(preferences: preferencesStore.preferences)

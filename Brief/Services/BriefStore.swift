@@ -66,6 +66,7 @@ final class BriefStore {
     func delete(_ brief: DailyBrief) {
         context.delete(brief)
         try? context.save()
+        suppressAutoRestoreIfStoreNowEmpty()
     }
 
     func deleteTodaysBrief() {
@@ -92,6 +93,19 @@ final class BriefStore {
             }
         }
         try? context.save()
+        suppressAutoRestoreIfStoreNowEmpty()
+    }
+
+    /// The launch auto-restore treats an empty store as data loss and
+    /// refills it from the most complete backup. When a user-initiated
+    /// delete is what emptied the store, that would resurrect exactly what
+    /// they just erased — so record the intent. Pruning deliberately does
+    /// NOT do this: it's not an expression of "I want this gone," and the
+    /// launch sequence handles the restore-then-pruned-empty case itself.
+    private func suppressAutoRestoreIfStoreNowEmpty() {
+        if BackupService.currentRecordCount(context: context) == 0 {
+            BackupService.suppressAutoRestore()
+        }
     }
 
     /// Fingerprints and short summaries from the last `days` days,
