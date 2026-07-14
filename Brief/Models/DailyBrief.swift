@@ -33,6 +33,10 @@ final class DailyBrief {
     var calendarEventsData: Data?
     /// JSON-encoded `WeatherSnapshot`, faithful to Open-Meteo.
     var weatherData: Data?
+    /// JSON-encoded `[LinkedAppDigest]` snapshot from the LockedInFit and
+    /// Social Climber feeds, rendered verbatim like weather and calendar.
+    /// Optional so briefs saved before this field existed keep loading.
+    var linkedAppDigestsData: Data?
     var calendarWasAvailable: Bool
     var estimatedReadingMinutes: Int
     var statusRaw: String
@@ -55,6 +59,7 @@ final class DailyBrief {
         calendarEvents: [CalendarEvent] = [],
         calendarWasAvailable: Bool = false,
         weather: WeatherSnapshot? = nil,
+        linkedAppDigests: [LinkedAppDigest] = [],
         estimatedReadingMinutes: Int = 5,
         status: BriefGenerationStatus = .complete,
         failureNotes: [String] = [],
@@ -74,6 +79,9 @@ final class DailyBrief {
         self.calendarEventsData = try? JSONEncoder.brief.encode(calendarEvents)
         self.calendarWasAvailable = calendarWasAvailable
         self.weatherData = weather.flatMap { try? JSONEncoder.brief.encode($0) }
+        self.linkedAppDigestsData = linkedAppDigests.isEmpty
+            ? nil
+            : try? JSONEncoder.brief.encode(linkedAppDigests)
         self.estimatedReadingMinutes = estimatedReadingMinutes
         self.statusRaw = status.rawValue
         self.failureNotes = failureNotes
@@ -105,6 +113,16 @@ extension DailyBrief {
             return try? JSONDecoder.brief.decode(WeatherSnapshot.self, from: weatherData)
         }
         set { weatherData = newValue.flatMap { try? JSONEncoder.brief.encode($0) } }
+    }
+
+    var linkedAppDigests: [LinkedAppDigest] {
+        get {
+            guard let linkedAppDigestsData else { return [] }
+            return (try? JSONDecoder.brief.decode([LinkedAppDigest].self, from: linkedAppDigestsData)) ?? []
+        }
+        set {
+            linkedAppDigestsData = newValue.isEmpty ? nil : try? JSONEncoder.brief.encode(newValue)
+        }
     }
 
     var orderedSections: [BriefSection] {

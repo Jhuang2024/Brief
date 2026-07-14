@@ -42,6 +42,18 @@ If you change the bundle identifier, changing the background task
 identifiers is **not** required — they are app-chosen strings and stay
 `com.jerry.brief.refresh` / `com.jerry.brief.breakingcheck`.
 
+### App Group (for the LockedInFit / Social Climber sections)
+
+`Brief/Brief.entitlements` declares the App Group
+`group.com.jerry.personalOS`, shared with LockedInFit and Social Climber.
+With a signing team selected, Xcode registers the group automatically on
+first build; if the **App Groups** capability shows an error in Signing &
+Capabilities, add the capability and re-check the group. Without it, Brief
+still builds and runs — the two app sections simply report that no data is
+available. Details of what flows through the group are in
+[LINKED_APPS.md](LINKED_APPS.md) (spoiler: two small JSON files, written
+by the apps, read by Brief, never leaving the device).
+
 ### API usage is capped to two things
 
 The brief itself only ever regenerates under two conditions: at the

@@ -180,11 +180,13 @@ struct SettingsView: View {
             Toggle("Include “Why it matters”", isOn: store.preferences.includeWhyItMatters)
             Toggle("Include Calendar", isOn: store.preferences.includeCalendar)
             Toggle("Include weather", isOn: store.preferences.includeWeather)
+            Toggle("Include LockedInFit", isOn: store.preferences.includeLockedInFit)
+            Toggle("Include Social Climber", isOn: store.preferences.includeSocialClimber)
             Toggle("Send event descriptions to OpenRouter", isOn: store.preferences.sendEventDescriptions)
         } header: {
             FormSectionHeader(title: "Briefing")
         } footer: {
-            Text("The brief only generates automatically at the morning time above, or when you tap refresh, never in between, even if it gets old during the day. This keeps API usage predictable.")
+            Text("The brief only generates automatically at the morning time above, or when you tap refresh, never in between, even if it gets old during the day. This keeps API usage predictable. LockedInFit and Social Climber are read on-device from their shared app data, never sent to any AI provider.")
                 .foregroundStyle(Color.inkSecondary)
         }
     }

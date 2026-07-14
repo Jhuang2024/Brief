@@ -22,6 +22,8 @@ struct BriefContentView: View {
                     .padding(.horizontal, 20)
             }
 
+            linkedAppSections
+
             newsSections
 
             ending
@@ -72,12 +74,25 @@ struct BriefContentView: View {
         }
     }
 
-    // MARK: - E. News sections
+    // MARK: - E. Linked apps (LockedInFit, Social Climber)
+
+    /// Personal sections read verbatim from the companion apps' feeds at
+    /// generation time. Which apps appear is decided by the engine (the
+    /// Settings toggles), so History renders exactly what each morning
+    /// showed regardless of today's toggle state.
+    private var linkedAppSections: some View {
+        ForEach(Array(brief.linkedAppDigests.enumerated()), id: \.element.id) { index, digest in
+            LinkedAppSectionView(digest: digest, index: index + 3)
+                .padding(.horizontal, 20)
+        }
+    }
+
+    // MARK: - F. News sections
 
     private var newsSections: some View {
         ForEach(Array(brief.orderedSections.enumerated()), id: \.element.id) { index, section in
             VStack(alignment: .leading, spacing: 4) {
-                SectionHeaderView(index: index + 3, title: section.title)
+                SectionHeaderView(index: index + 3 + brief.linkedAppDigests.count, title: section.title)
                     .padding(.horizontal, 20)
                 ForEach(section.orderedStories) { story in
                     StoryRowView(
@@ -181,6 +196,120 @@ struct CalendarEventRow: View {
         }
         .padding(.vertical, 9)
         .accessibilityElement(children: .combine)
+    }
+}
+
+/// One linked app's block: yesterday's activity lines and today's
+/// reminders, straight from the app's feed. Deliberately plain and factual;
+/// nothing here passed through a model.
+struct LinkedAppSectionView: View {
+    let digest: LinkedAppDigest
+    let index: Int
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeaderView(index: index, title: digest.app.displayName)
+
+            if let note = digest.statusNote {
+                Text(note)
+                    .font(.subheadline)
+                    .foregroundStyle(Color.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            if !digest.activityLines.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    LinkedAppSubheading(text: digest.activityLabel)
+                    ForEach(Array(digest.activityLines.enumerated()), id: \.offset) { _, line in
+                        HStack(alignment: .top, spacing: 8) {
+                            Rectangle()
+                                .fill(Color.accentColor.opacity(0.7))
+                                .frame(width: 2)
+                                .padding(.vertical, 2)
+                            Text(line)
+                                .font(.system(size: 15))
+                                .lineSpacing(2.5)
+                                .foregroundStyle(Color.ink.opacity(0.9))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .textSelection(.enabled)
+                        }
+                    }
+                }
+            } else if digest.availability != .unavailable {
+                Text("Nothing logged.")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.inkSecondary)
+            }
+
+            if !digest.todayReminders.isEmpty {
+                VStack(alignment: .leading, spacing: 0) {
+                    LinkedAppSubheading(text: "Today")
+                        .padding(.bottom, 4)
+                    ForEach(digest.todayReminders) { reminder in
+                        LinkedAppReminderRow(reminder: reminder)
+                        if reminder != digest.todayReminders.last {
+                            FineRule()
+                        }
+                    }
+                }
+            }
+        }
+        .accessibilityElement(children: .contain)
+    }
+}
+
+/// The small "Yesterday" / "Today" label inside a linked-app section.
+private struct LinkedAppSubheading: View {
+    let text: String
+
+    var body: some View {
+        Text(text.uppercased())
+            .font(.system(size: 11, weight: .semibold, design: .rounded))
+            .tracking(0.8)
+            .foregroundStyle(Color.inkSecondary)
+    }
+}
+
+/// One reminder from a linked app: time column, title, optional detail,
+/// overdue badge. Mirrors CalendarEventRow's layout so the brief reads as
+/// one system.
+struct LinkedAppReminderRow: View {
+    let reminder: LinkedAppReminder
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Text(timeLabel)
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .frame(width: 62, alignment: .trailing)
+                .foregroundStyle(reminder.overdue ? Color.accentColor : Color.ink)
+
+            Rectangle()
+                .fill(Color.accentColor.opacity(0.7))
+                .frame(width: 2)
+                .padding(.vertical, 2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(reminder.title)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let detail = reminder.detail, !detail.isEmpty {
+                    Text(detail)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.inkSecondary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
+        }
+        .padding(.vertical, 9)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var timeLabel: String {
+        if reminder.overdue { return "Overdue" }
+        if reminder.isAllDay { return "Today" }
+        return DateFormatting.time.string(from: reminder.dueDate)
     }
 }
 

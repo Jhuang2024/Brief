@@ -98,6 +98,7 @@ final class BriefingEngine {
     private let locationService: LocationService
     private let openRouter = OpenRouterService()
     private let weatherService = WeatherService()
+    private let linkedApps = LinkedAppsService()
 
     private(set) var phases: [PhaseProgress] = []
     private(set) var isGenerating = false
@@ -244,6 +245,12 @@ final class BriefingEngine {
         if let note = calendarContext.failureNote { diagnostics.errors.append(note) }
         if let note = weatherContext.failureNote { diagnostics.errors.append(note) }
 
+        // Linked-app digests: plain file reads from the shared App Group
+        // container, deterministic and instant. Missing or stale feeds
+        // become digests that explain themselves in the section, so they
+        // never fail generation or mark the brief partial.
+        let linkedAppDigests = fetchLinkedAppDigests(preferences: preferences)
+
         let context = BriefContext(
             now: Date(),
             timezone: .current,
@@ -361,6 +368,7 @@ final class BriefingEngine {
             context: context,
             packets: packets,
             failedGroups: failedGroups,
+            linkedAppDigests: linkedAppDigests,
             diagnostics: &diagnostics,
             duration: Date().timeIntervalSince(overallStart)
         )
@@ -472,6 +480,18 @@ final class BriefingEngine {
                 failureNote: "Weather unavailable: \(error.localizedDescription)"
             )
         }
+    }
+
+    /// Reads the LockedInFit and Social Climber brief feeds from the shared
+    /// App Group container. Synchronous file reads, so the phase is done the
+    /// moment it starts; it exists so the progress list reflects that the
+    /// apps were checked at all.
+    private func fetchLinkedAppDigests(preferences: UserPreferences) -> [LinkedAppDigest] {
+        guard preferences.includeLockedInFit || preferences.includeSocialClimber else { return [] }
+        markPhase("checking_apps", .active)
+        let digests = linkedApps.digests(preferences: preferences)
+        markPhase("checking_apps", .done)
+        return digests
     }
 
     // MARK: - Stage 2
@@ -742,6 +762,7 @@ final class BriefingEngine {
         context: BriefContext,
         packets: [ResearchPacket],
         failedGroups: [ResearchGroup],
+        linkedAppDigests: [LinkedAppDigest],
         diagnostics: inout GenerationDiagnostics,
         duration: TimeInterval
     ) -> DailyBrief {
@@ -903,6 +924,7 @@ final class BriefingEngine {
             calendarEvents: context.todayEvents,
             calendarWasAvailable: context.calendarAvailable,
             weather: weather,
+            linkedAppDigests: linkedAppDigests,
             estimatedReadingMinutes: readingMinutes,
             status: status,
             failureNotes: failureNotes,
@@ -924,6 +946,9 @@ final class BriefingEngine {
             list.append(PhaseProgress(id: "reading_calendar", title: "Reading Calendar"))
         }
         list.append(PhaseProgress(id: "checking_weather", title: "Checking weather"))
+        if preferences.includeLockedInFit || preferences.includeSocialClimber {
+            list.append(PhaseProgress(id: "checking_apps", title: "Checking your apps"))
+        }
         for group in enabledResearchGroups(preferences: preferences) {
             list.append(PhaseProgress(id: group.rawValue, title: Self.phaseTitle(for: group)))
         }

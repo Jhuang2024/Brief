@@ -169,6 +169,10 @@ struct UserPreferences: Codable, Equatable {
     var includeWhyItMatters: Bool = true
     var includeCalendar: Bool = true
     var includeWeather: Bool = true
+    /// Personal sections read from the shared App Group feeds the companion
+    /// apps write (see LINKED_APPS.md). Purely on-device, no API calls.
+    var includeLockedInFit: Bool = true
+    var includeSocialClimber: Bool = true
     /// Off by default: event descriptions are only sent to OpenRouter when enabled.
     var sendEventDescriptions: Bool = false
 
