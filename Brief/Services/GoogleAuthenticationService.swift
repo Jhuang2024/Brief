@@ -2,12 +2,16 @@ import Foundation
 import GoogleSignIn
 import UIKit
 
-/// Wraps Google Sign-In for read-only Calendar access.
-/// Never requests write scopes; never creates, edits or deletes events.
+/// Wraps Google Sign-In for read-only Calendar and Gmail access.
+/// Never requests write scopes; never creates, edits or deletes anything.
+/// Calendar is the primary connection (requested at connect time); Gmail is
+/// an incremental grant added later from Settings, so connecting Calendar
+/// never forces an email consent screen on someone who doesn't want it.
 @MainActor
 @Observable
 final class GoogleAuthenticationService {
     static let calendarReadOnlyScope = "https://www.googleapis.com/auth/calendar.readonly"
+    static let gmailReadOnlyScope = "https://www.googleapis.com/auth/gmail.readonly"
 
     enum ConnectionState: Equatable {
         case notConfigured
@@ -112,9 +116,16 @@ final class GoogleAuthenticationService {
         }
         let scopes = user.grantedScopes ?? []
         let hasCalendarScope = scopes.contains(Self.calendarReadOnlyScope)
+        let hasGmail = scopes.contains(Self.gmailReadOnlyScope)
         let email = user.profile?.email ?? "unknown account"
         return "Live session for \(email); calendar.readonly granted: \(hasCalendarScope); "
-            + "state: \(state.displayName)."
+            + "gmail.readonly granted: \(hasGmail); state: \(state.displayName)."
+    }
+
+    /// Whether the live session may read Gmail. False when disconnected,
+    /// not yet restored this launch, or the scope was never granted.
+    var hasGmailScope: Bool {
+        GIDSignIn.sharedInstance.currentUser?.grantedScopes?.contains(Self.gmailReadOnlyScope) == true
     }
 
     /// Restore the previous session on launch.
@@ -160,15 +171,47 @@ final class GoogleAuthenticationService {
         state = .disconnected
     }
 
+    /// Incremental Gmail grant from Settings, added to the existing signed-in
+    /// account so the user only re-consents to the one new scope. Falls back
+    /// to a full sign-in (with both read-only scopes) when there's no live
+    /// session to add to.
+    func grantGmailAccess() async throws {
+        guard Self.isConfigured else {
+            state = .notConfigured
+            throw AuthError.notConfigured
+        }
+        guard let presenter = Self.presentingViewController() else {
+            throw AuthError.noPresentingViewController
+        }
+        if let user = GIDSignIn.sharedInstance.currentUser {
+            let result = try await user.addScopes([Self.gmailReadOnlyScope], presenting: presenter)
+            updateState(for: result.user)
+        } else {
+            let result = try await GIDSignIn.sharedInstance.signIn(
+                withPresenting: presenter,
+                hint: nil,
+                additionalScopes: [Self.calendarReadOnlyScope, Self.gmailReadOnlyScope]
+            )
+            updateState(for: result.user)
+        }
+    }
+
     /// A fresh access token, refreshing when required. Grants the caller
-    /// nothing beyond calendar.readonly.
-    func accessToken() async throws -> String {
+    /// nothing beyond the read-only scope it names; callers state which one
+    /// they need so a missing Gmail grant can never be papered over by a
+    /// calendar-only session (or vice versa). Only a missing CALENDAR scope
+    /// moves the connection state to `.missingScope` — that state describes
+    /// the primary Calendar connection shown in Settings, and Gmail being
+    /// ungranted is an ordinary, deliberate configuration, not a broken one.
+    func accessToken(requiring scope: String = calendarReadOnlyScope) async throws -> String {
         guard let user = GIDSignIn.sharedInstance.currentUser else {
             state = GIDSignIn.sharedInstance.hasPreviousSignIn() ? .tokenExpired : .disconnected
             throw AuthError.notConnected
         }
-        guard user.grantedScopes?.contains(Self.calendarReadOnlyScope) == true else {
-            state = .missingScope
+        guard user.grantedScopes?.contains(scope) == true else {
+            if scope == Self.calendarReadOnlyScope {
+                state = .missingScope
+            }
             throw AuthError.missingScope
         }
         do {

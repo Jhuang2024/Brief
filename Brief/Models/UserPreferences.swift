@@ -169,6 +169,11 @@ struct UserPreferences: Codable, Equatable {
     var includeWhyItMatters: Bool = true
     var includeCalendar: Bool = true
     var includeWeather: Bool = true
+    /// Recent inbox mail from Gmail (read-only), shown verbatim and never
+    /// sent to any AI provider. Requires the Gmail grant in Settings →
+    /// Connections; until granted, the section explains itself instead of
+    /// failing the brief.
+    var includeEmail: Bool = true
     /// Personal sections read from the shared App Group feeds the companion
     /// apps write (see LINKED_APPS.md). Purely on-device, no API calls.
     var includeLockedInFit: Bool = true

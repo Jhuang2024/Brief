@@ -37,6 +37,11 @@ final class DailyBrief {
     /// Social Climber feeds, rendered verbatim like weather and calendar.
     /// Optional so briefs saved before this field existed keep loading.
     var linkedAppDigestsData: Data?
+    /// JSON-encoded `[EmailMessage]` snapshot, faithful to Gmail. Optional
+    /// (and the Bool defaulted) so briefs saved before these fields existed
+    /// keep loading.
+    var emailMessagesData: Data?
+    var emailWasAvailable: Bool = false
     var calendarWasAvailable: Bool
     var estimatedReadingMinutes: Int
     var statusRaw: String
@@ -60,6 +65,8 @@ final class DailyBrief {
         calendarWasAvailable: Bool = false,
         weather: WeatherSnapshot? = nil,
         linkedAppDigests: [LinkedAppDigest] = [],
+        emailMessages: [EmailMessage] = [],
+        emailWasAvailable: Bool = false,
         estimatedReadingMinutes: Int = 5,
         status: BriefGenerationStatus = .complete,
         failureNotes: [String] = [],
@@ -82,6 +89,10 @@ final class DailyBrief {
         self.linkedAppDigestsData = linkedAppDigests.isEmpty
             ? nil
             : try? JSONEncoder.brief.encode(linkedAppDigests)
+        self.emailMessagesData = emailMessages.isEmpty
+            ? nil
+            : try? JSONEncoder.brief.encode(emailMessages)
+        self.emailWasAvailable = emailWasAvailable
         self.estimatedReadingMinutes = estimatedReadingMinutes
         self.statusRaw = status.rawValue
         self.failureNotes = failureNotes
@@ -122,6 +133,16 @@ extension DailyBrief {
         }
         set {
             linkedAppDigestsData = newValue.isEmpty ? nil : try? JSONEncoder.brief.encode(newValue)
+        }
+    }
+
+    var emailMessages: [EmailMessage] {
+        get {
+            guard let emailMessagesData else { return [] }
+            return (try? JSONDecoder.brief.decode([EmailMessage].self, from: emailMessagesData)) ?? []
+        }
+        set {
+            emailMessagesData = newValue.isEmpty ? nil : try? JSONEncoder.brief.encode(newValue)
         }
     }
 

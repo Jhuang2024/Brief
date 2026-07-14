@@ -22,6 +22,11 @@ struct BriefContentView: View {
                     .padding(.horizontal, 20)
             }
 
+            if preferences.includeEmail {
+                emailSection
+                    .padding(.horizontal, 20)
+            }
+
             linkedAppSections
 
             newsSections
@@ -74,7 +79,41 @@ struct BriefContentView: View {
         }
     }
 
-    // MARK: - E. Linked apps (LockedInFit, Social Climber)
+    // MARK: - E. Email
+
+    /// Shift applied to every section number after Email, so numbering
+    /// stays consecutive whether or not the Email section is shown.
+    private var emailSectionOffset: Int {
+        preferences.includeEmail ? 1 : 0
+    }
+
+    @ViewBuilder
+    private var emailSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            SectionHeaderView(index: 3, title: "Email")
+            if !brief.emailWasAvailable {
+                Text("Email unavailable for this briefing. Grant Gmail access in Settings → Connections.")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.inkSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else if brief.emailMessages.isEmpty {
+                Text("Nothing new overnight.")
+                    .font(.subheadline)
+                    .foregroundStyle(Color.inkSecondary)
+            } else {
+                VStack(spacing: 0) {
+                    ForEach(brief.emailMessages) { message in
+                        EmailMessageRow(message: message)
+                        if message != brief.emailMessages.last {
+                            FineRule()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - F. Linked apps (LockedInFit, Social Climber)
 
     /// Personal sections read verbatim from the companion apps' feeds at
     /// generation time. Which apps appear is decided by the engine (the
@@ -82,17 +121,17 @@ struct BriefContentView: View {
     /// showed regardless of today's toggle state.
     private var linkedAppSections: some View {
         ForEach(Array(brief.linkedAppDigests.enumerated()), id: \.element.id) { index, digest in
-            LinkedAppSectionView(digest: digest, index: index + 3)
+            LinkedAppSectionView(digest: digest, index: index + 3 + emailSectionOffset)
                 .padding(.horizontal, 20)
         }
     }
 
-    // MARK: - F. News sections
+    // MARK: - G. News sections
 
     private var newsSections: some View {
         ForEach(Array(brief.orderedSections.enumerated()), id: \.element.id) { index, section in
             VStack(alignment: .leading, spacing: 4) {
-                SectionHeaderView(index: index + 3 + brief.linkedAppDigests.count, title: section.title)
+                SectionHeaderView(index: index + 3 + emailSectionOffset + brief.linkedAppDigests.count, title: section.title)
                     .padding(.horizontal, 20)
                 ForEach(section.orderedStories) { story in
                     StoryRowView(
@@ -193,6 +232,55 @@ struct CalendarEventRow: View {
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
                     .foregroundStyle(Color.accentColor)
             }
+        }
+        .padding(.vertical, 9)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// One inbox message: time column, sender, subject, snippet, unread dot.
+/// Mirrors CalendarEventRow's layout so the brief reads as one system;
+/// everything shown is verbatim from Gmail.
+struct EmailMessageRow: View {
+    let message: EmailMessage
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            Text(DateFormatting.time.string(from: message.receivedAt))
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .frame(width: 62, alignment: .trailing)
+                .foregroundStyle(Color.ink)
+
+            Rectangle()
+                .fill(Color.accentColor.opacity(0.7))
+                .frame(width: 2)
+                .padding(.vertical, 2)
+
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    if message.isUnread {
+                        Circle()
+                            .fill(Color.accentColor)
+                            .frame(width: 6, height: 6)
+                            .accessibilityLabel("Unread")
+                    }
+                    Text(message.fromName)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.inkSecondary)
+                        .lineLimit(1)
+                }
+                Text(message.subject)
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundStyle(Color.ink)
+                    .fixedSize(horizontal: false, vertical: true)
+                if !message.snippet.isEmpty {
+                    Text(message.snippet)
+                        .font(.system(size: 12))
+                        .foregroundStyle(Color.inkSecondary)
+                        .lineLimit(2)
+                }
+            }
+            Spacer(minLength: 8)
         }
         .padding(.vertical, 9)
         .accessibilityElement(children: .combine)

@@ -136,7 +136,7 @@ a saved key and the first attempt fails — "use whichever one works."
 
 ---
 
-## 3. Google Calendar (one-time Google Cloud setup)
+## 3. Google Calendar & Gmail (one-time Google Cloud setup)
 
 **Already done for this build** — `Brief/Info.plist` already has a real
 `GIDClientID` and matching `CFBundleURLSchemes` entry wired in, so
@@ -153,6 +153,7 @@ belongs there rather than in a runtime settings screen.
 1. Go to <https://console.cloud.google.com/> and create (or select) a project,
    e.g. "Brief".
 2. **APIs & Services → Library** → search **Google Calendar API** → **Enable**.
+   For the Email section, also enable the **Gmail API** in the same Library.
 3. **APIs & Services → OAuth consent screen**:
    - User type: **External**, then fill in only the required fields.
    - **Keep the app in Testing** (do not publish).
@@ -177,6 +178,13 @@ belongs there rather than in a runtime settings screen.
 7. Optional: **Settings → Select Calendars** to include calendars beyond the
    primary one. Access is read-only; the app never creates, edits, or deletes
    events.
+8. For the Email section: **Settings → Connections → Grant Gmail access
+   (read-only)**. Gmail is a separate, incremental grant on top of the
+   Calendar connection, so connecting Calendar never forces an email consent
+   screen. The brief shows recent inbox mail (promotions and social tabs
+   excluded) verbatim — email content is never sent to any AI provider, and
+   the app can never send, modify, or delete mail. Until the grant is made,
+   the Email section simply says it's unavailable; it never fails the brief.
 
 ---
 

@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var confirmReset = false
     @State private var isBackingUp = false
     @State private var backupResult: String?
+    @State private var gmailGrantError: String?
     /// Cached on appear instead of calling into BackupService from `body`:
     /// listing backups reads the index file (and checks the App Group
     /// container), and re-doing that on every keystroke anywhere in
@@ -88,6 +89,7 @@ struct SettingsView: View {
             }
 
             googleRow
+            gmailRow
 
             NavigationLink {
                 CalendarSelectionView(viewModel: viewModel)
@@ -100,6 +102,37 @@ struct SettingsView: View {
             LabeledContent("Notifications", value: viewModel.notificationStatusDescription)
         } header: {
             FormSectionHeader(title: "Connections")
+        }
+    }
+
+    /// Gmail is an incremental grant on top of the Calendar connection, so
+    /// connecting Google never forces an email consent screen on someone
+    /// who only wants Calendar. The row only appears once Google is
+    /// connected at all.
+    @ViewBuilder
+    private var gmailRow: some View {
+        if viewModel.googleAuth.isConnected {
+            LabeledContent("Gmail") {
+                Text(viewModel.googleAuth.hasGmailScope ? "Connected (read-only)" : "Not granted")
+                    .foregroundStyle(Color.inkSecondary)
+            }
+            if !viewModel.googleAuth.hasGmailScope {
+                Button("Grant Gmail access (read-only)") {
+                    gmailGrantError = nil
+                    Task {
+                        do {
+                            try await viewModel.googleAuth.grantGmailAccess()
+                        } catch {
+                            gmailGrantError = error.localizedDescription
+                        }
+                    }
+                }
+                if let gmailGrantError {
+                    Text(gmailGrantError)
+                        .font(.caption)
+                        .foregroundStyle(Color.inkSecondary)
+                }
+            }
         }
     }
 
@@ -192,6 +225,7 @@ struct SettingsView: View {
             Toggle("Morning notification", isOn: store.preferences.notificationsEnabled)
             Toggle("Include “Why it matters”", isOn: store.preferences.includeWhyItMatters)
             Toggle("Include Calendar", isOn: store.preferences.includeCalendar)
+            Toggle("Include Email", isOn: store.preferences.includeEmail)
             Toggle("Include weather", isOn: store.preferences.includeWeather)
             Toggle("Include LockedInFit", isOn: store.preferences.includeLockedInFit)
             Toggle("Include Social Climber", isOn: store.preferences.includeSocialClimber)
@@ -199,7 +233,7 @@ struct SettingsView: View {
         } header: {
             FormSectionHeader(title: "Briefing")
         } footer: {
-            Text("The brief only generates automatically at the morning time above, or when you tap refresh, never in between, even if it gets old during the day. This keeps API usage predictable. LockedInFit and Social Climber are read on-device from their shared app data, never sent to any AI provider.")
+            Text("The brief only generates automatically at the morning time above, or when you tap refresh, never in between, even if it gets old during the day. This keeps API usage predictable. Email, LockedInFit, and Social Climber are shown verbatim and never sent to any AI provider.")
                 .foregroundStyle(Color.inkSecondary)
         }
     }

@@ -109,6 +109,10 @@ enum BackupService {
             var calendarEventsData: Data?
             var weatherData: Data?
             var linkedAppDigestsData: Data?
+            var emailMessagesData: Data?
+            /// Optional so archives written before the Email section
+            /// existed still decode; absent reads as false.
+            var emailWasAvailable: Bool?
             var calendarWasAvailable: Bool
             var estimatedReadingMinutes: Int
             var statusRaw: String
@@ -194,6 +198,8 @@ enum BackupService {
                     calendarEventsData: brief.calendarEventsData,
                     weatherData: brief.weatherData,
                     linkedAppDigestsData: brief.linkedAppDigestsData,
+                    emailMessagesData: brief.emailMessagesData,
+                    emailWasAvailable: brief.emailWasAvailable,
                     calendarWasAvailable: brief.calendarWasAvailable,
                     estimatedReadingMinutes: brief.estimatedReadingMinutes,
                     statusRaw: brief.statusRaw,
@@ -552,6 +558,8 @@ enum BackupService {
             brief.calendarEventsData = record.calendarEventsData
             brief.weatherData = record.weatherData
             brief.linkedAppDigestsData = record.linkedAppDigestsData
+            brief.emailMessagesData = record.emailMessagesData
+            brief.emailWasAvailable = record.emailWasAvailable ?? false
             context.insert(brief)
             restoredRows += 1 + record.sections.reduce(0) { sectionTotal, section in
                 sectionTotal + 1 + section.stories.reduce(0) { storyTotal, story in

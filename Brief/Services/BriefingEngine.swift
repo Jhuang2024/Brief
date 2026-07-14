@@ -239,11 +239,14 @@ final class BriefingEngine {
 
         async let calendarFetch = fetchCalendarContext(preferences: preferences)
         async let weatherFetch = fetchWeatherContext(preferences: preferences)
+        async let emailFetch = fetchEmailContext(preferences: preferences)
         let calendarContext = await calendarFetch
         let weatherContext = await weatherFetch
+        let emailContext = await emailFetch
 
         if let note = calendarContext.failureNote { diagnostics.errors.append(note) }
         if let note = weatherContext.failureNote { diagnostics.errors.append(note) }
+        if let note = emailContext.failureNote { diagnostics.errors.append(note) }
 
         // Linked-app digests: plain file reads from the shared App Group
         // container, deterministic and instant. Missing or stale feeds
@@ -369,6 +372,9 @@ final class BriefingEngine {
             packets: packets,
             failedGroups: failedGroups,
             linkedAppDigests: linkedAppDigests,
+            emailMessages: emailContext.messages,
+            emailWasAvailable: emailContext.available,
+            emailFailureNote: emailContext.failureNote,
             diagnostics: &diagnostics,
             duration: Date().timeIntervalSince(overallStart)
         )
@@ -423,6 +429,12 @@ final class BriefingEngine {
         var failureNote: String?
     }
 
+    private struct EmailContext {
+        var available: Bool
+        var messages: [EmailMessage]
+        var failureNote: String?
+    }
+
     private func fetchCalendarContext(preferences: UserPreferences) async -> CalendarContext {
         guard preferences.includeCalendar else {
             markPhase("reading_calendar", .done)
@@ -456,6 +468,39 @@ final class BriefingEngine {
             return CalendarContext(
                 available: false, todayEvents: [], weekEvents: [],
                 failureNote: "Calendar unavailable: \(error.localizedDescription) \(googleAuth.sessionDiagnostic)"
+            )
+        }
+    }
+
+    /// Recent inbox mail for the Email section. Three distinct outcomes on
+    /// purpose: fetched (available, possibly empty — a quiet night is real
+    /// information), silently unavailable (Gmail simply not granted — an
+    /// ordinary configuration, so no failure note and the brief stays
+    /// `complete`; the section itself explains how to connect), and failed
+    /// (granted but the fetch errored — that IS worth a failure note).
+    /// Email content never reaches the AI providers: it goes straight from
+    /// here into the persisted brief and is rendered verbatim, like weather
+    /// numbers.
+    private func fetchEmailContext(preferences: UserPreferences) async -> EmailContext {
+        guard preferences.includeEmail else {
+            markPhase("reading_email", .done)
+            return EmailContext(available: false, messages: [], failureNote: nil)
+        }
+        markPhase("reading_email", .active)
+        guard googleAuth.hasLiveSession, googleAuth.hasGmailScope else {
+            markPhase("reading_email", .done)
+            return EmailContext(available: false, messages: [], failureNote: nil)
+        }
+        do {
+            let since = Date().addingTimeInterval(-24 * 3600)
+            let messages = try await GmailService(auth: googleAuth).fetchInboxMessages(since: since)
+            markPhase("reading_email", .done)
+            return EmailContext(available: true, messages: messages, failureNote: nil)
+        } catch {
+            markPhase("reading_email", .failed)
+            return EmailContext(
+                available: false, messages: [],
+                failureNote: "Email unavailable: \(error.localizedDescription)"
             )
         }
     }
@@ -766,6 +811,9 @@ final class BriefingEngine {
         packets: [ResearchPacket],
         failedGroups: [ResearchGroup],
         linkedAppDigests: [LinkedAppDigest],
+        emailMessages: [EmailMessage],
+        emailWasAvailable: Bool,
+        emailFailureNote: String?,
         diagnostics: inout GenerationDiagnostics,
         duration: TimeInterval
     ) -> DailyBrief {
@@ -913,6 +961,12 @@ final class BriefingEngine {
         if preferences.includeWeather && context.weatherFailed {
             failureNotes.append("Weather was unavailable.")
         }
+        // Only a real fetch failure marks the brief partial; Gmail simply
+        // not being granted is an ordinary configuration the section
+        // explains on its own.
+        if preferences.includeEmail && emailFailureNote != nil {
+            failureNotes.append("Email was unavailable.")
+        }
         let status: BriefGenerationStatus = failureNotes.isEmpty ? .complete : .partial
 
         diagnostics.validationNotes = notes
@@ -928,6 +982,8 @@ final class BriefingEngine {
             calendarWasAvailable: context.calendarAvailable,
             weather: weather,
             linkedAppDigests: linkedAppDigests,
+            emailMessages: emailMessages,
+            emailWasAvailable: emailWasAvailable,
             estimatedReadingMinutes: readingMinutes,
             status: status,
             failureNotes: failureNotes,
@@ -947,6 +1003,9 @@ final class BriefingEngine {
         ]
         if preferences.includeCalendar {
             list.append(PhaseProgress(id: "reading_calendar", title: "Reading Calendar"))
+        }
+        if preferences.includeEmail {
+            list.append(PhaseProgress(id: "reading_email", title: "Reading Email"))
         }
         list.append(PhaseProgress(id: "checking_weather", title: "Checking weather"))
         if preferences.includeLockedInFit || preferences.includeSocialClimber {

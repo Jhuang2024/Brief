@@ -5,12 +5,14 @@ A private morning intelligence briefing for one person.
 Open once. Understand the day. Leave.
 
 Brief replaces the morning round of news sites, ESPN, F1 apps, weather apps,
-and Google Calendar with a single five-minute editorial briefing: what
-happened in the world overnight, what matters in technology and AI, Formula 1
-and sports, UC Berkeley, today's calendar, and the weather — researched on
-the web via OpenRouter and/or Bazaarlink (both can be configured at once,
-with automatic failover to whichever one works), edited into a compact
-brief, and rendered in an editorial, newspaper-inspired interface.
+Gmail, and Google Calendar with a single five-minute editorial briefing:
+what happened in the world overnight, what matters in technology and AI,
+Formula 1 and sports, UC Berkeley, today's calendar, overnight email, and
+the weather — researched on the web via OpenRouter and/or Bazaarlink (both
+can be configured at once, with automatic failover to whichever one works),
+edited into a compact brief, and rendered in an editorial,
+newspaper-inspired interface. Email is read-only, shown verbatim, and never
+sent to any AI provider.
 
 When [LockedInFit](https://github.com/Jhuang2024/locked-in-fit) and
 [Social Climber](https://github.com/Jhuang2024/Social-Climber) are installed

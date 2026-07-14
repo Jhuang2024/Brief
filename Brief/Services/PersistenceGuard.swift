@@ -30,7 +30,7 @@ import os
 /// `AppEnvironment` changes, so a real migration always gets a
 /// pre-migration snapshot.
 enum PersistenceGuard {
-    static let currentSchemaVersion = 2 // v2: DailyBrief.linkedAppDigestsData added
+    static let currentSchemaVersion = 3 // v3: DailyBrief email fields; v2: linkedAppDigestsData
 
     private static let logger = Logger(subsystem: "com.jerry.brief", category: "PersistenceGuard")
     private static let lastSeenSchemaVersionKey = "brief.lastSeenSchemaVersion"
