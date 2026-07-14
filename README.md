@@ -28,7 +28,8 @@ verbatim, never sent to any AI provider. See
   history, alerts, and preferences are snapshotted after each generation
   and on backgrounding, rotated locally, and mirrored to the shared App
   Group container so they survive app updates and reinstalls; restore from
-  Settings → Backups. API keys are never in a backup.
+  Settings → Backups. A byte-for-byte copy of the raw store is also taken
+  before any schema migration. API keys are never in a backup.
 - Deliberately finite: no feeds, no trending tabs, no engagement mechanics
 
 See [SETUP.md](SETUP.md) for the one-time AI provider and Google Cloud setup.

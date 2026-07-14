@@ -32,6 +32,11 @@ final class AppEnvironment {
     private var launchTask: Task<Void, Never>?
 
     private init() {
+        // Before SwiftData touches the store: take a byte-for-byte copy of
+        // the raw store files if the schema changed since last launch, and
+        // log any container-path changes. See PersistenceGuard.
+        PersistenceGuard.runPreLaunchChecks()
+
         let schema = Schema([
             DailyBrief.self, BriefSection.self, BriefStory.self, BriefSource.self, BreakingAlert.self,
         ])
