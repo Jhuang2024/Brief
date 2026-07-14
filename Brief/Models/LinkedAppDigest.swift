@@ -10,9 +10,11 @@ enum LinkedApp: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
 
+    /// Spaced like the apps' own marketing names; the section header
+    /// uppercases this, and "LOCKEDINFIT" run together reads like a typo.
     var displayName: String {
         switch self {
-        case .lockedInFit: return "LockedInFit"
+        case .lockedInFit: return "Locked In Fit"
         case .socialClimber: return "Social Climber"
         }
     }

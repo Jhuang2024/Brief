@@ -218,20 +218,25 @@ struct LinkedAppSectionView: View {
             }
 
             if !digest.activityLines.isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 8) {
                     LinkedAppSubheading(text: digest.activityLabel)
-                    ForEach(Array(digest.activityLines.enumerated()), id: \.offset) { _, line in
-                        HStack(alignment: .top, spacing: 8) {
-                            Rectangle()
-                                .fill(Color.accentColor.opacity(0.7))
-                                .frame(width: 2)
-                                .padding(.vertical, 2)
-                            Text(line)
-                                .font(.system(size: 15))
-                                .lineSpacing(2.5)
-                                .foregroundStyle(Color.ink.opacity(0.9))
-                                .fixedSize(horizontal: false, vertical: true)
-                                .textSelection(.enabled)
+                    // One rule for the whole block, like the "why it
+                    // matters" quote: per-line bars fragmented the list
+                    // into what read as separate stubby quotes.
+                    HStack(alignment: .top, spacing: 12) {
+                        Rectangle()
+                            .fill(Color.accentColor.opacity(0.7))
+                            .frame(width: 2)
+                            .padding(.vertical, 2)
+                        VStack(alignment: .leading, spacing: 7) {
+                            ForEach(Array(digest.activityLines.enumerated()), id: \.offset) { _, line in
+                                Text(line)
+                                    .font(.system(size: 15))
+                                    .lineSpacing(2.5)
+                                    .foregroundStyle(Color.ink.opacity(0.9))
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .textSelection(.enabled)
+                            }
                         }
                     }
                 }
