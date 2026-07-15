@@ -9,7 +9,7 @@ final class SettingsViewModel {
 
     // Per-provider key entry/test state. Flat, doubled-up properties
     // rather than a dictionary/array so each provider's row in Settings
-    // binds directly without keyed-lookup binding gymnastics - the
+    // binds directly without keyed-lookup binding gymnastics: the
     // methods below are generic over AIProvider so the duplication stays
     // out of the actual logic.
     var openRouterKeyInput = ""
@@ -27,7 +27,7 @@ final class SettingsViewModel {
     var isLoadingCalendars = false
     var googleError: String?
 
-    // Calendar self-test (Google Calendar API only - never touches the paid
+    // Calendar self-test (Google Calendar API only; never touches the paid
     // AI provider, so running it can't burn generation credits).
     var calendarTestResult: String?
     var isTestingCalendar = false
@@ -130,7 +130,7 @@ final class SettingsViewModel {
 
     /// Deliberately does not regenerate today's brief on connect, even if
     /// the cached brief predates this connection and still shows Calendar
-    /// as unavailable - the brief only ever regenerates at the configured
+    /// as unavailable: the brief only ever regenerates at the configured
     /// morning time or via a manual refresh, never automatically as a
     /// side effect of another setting change, so connecting never burns
     /// API credits on its own. A manual refresh picks up the new
@@ -162,9 +162,9 @@ final class SettingsViewModel {
         }
     }
 
-    /// Reproduces exactly what generation does when it reads the calendar -
+    /// Reproduces exactly what generation does when it reads the calendar:
     /// restores the session, then fetches today's events for the selected
-    /// calendars - and reports the precise outcome. This calls only the free
+    /// calendars, and reports the precise outcome. This calls only the free
     /// Google Calendar API, never the paid AI provider, so it diagnoses a
     /// "Calendar unavailable" brief without regenerating one or spending any
     /// generation credits.
@@ -217,7 +217,7 @@ final class SettingsViewModel {
     }
 
     /// The calendar-related failure recorded for the most recent generation,
-    /// pulled from the persisted diagnostics - no regeneration required. Nil
+    /// pulled from the persisted diagnostics; no regeneration required. Nil
     /// when the last brief's calendar succeeded (or nothing has run yet).
     var lastCalendarDiagnostic: String? {
         guard let json = environment.engine.lastDiagnosticsJSON,

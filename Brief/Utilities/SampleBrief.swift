@@ -2,7 +2,7 @@
 import Foundation
 
 /// A realistic sample briefing for SwiftUI previews and the debug-only
-/// "Load sample briefing" button - so the interface can be exercised
+/// "Load sample briefing" button, so the interface can be exercised
 /// without spending OpenRouter credits. Never used in release builds.
 enum SampleBrief {
     @MainActor

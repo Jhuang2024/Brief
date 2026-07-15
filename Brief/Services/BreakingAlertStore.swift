@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 /// SwiftData persistence for hourly breaking-check alerts. Deliberately
-/// separate from `BriefStore` - alerts are a different kind of content
+/// separate from `BriefStore`: alerts are a different kind of content
 /// (rare, out-of-cycle, dismissible) with their own short retention.
 @MainActor
 final class BreakingAlertStore {
@@ -52,7 +52,7 @@ final class BreakingAlertStore {
         BackupService.scheduleBackupSoon(container: container)
     }
 
-    /// Mutates rather than deletes - safe even if a view is currently
+    /// Mutates rather than deletes: safe even if a view is currently
     /// rendering this exact alert, unlike a delete of a live-referenced
     /// SwiftData object (see BriefStore.save's doc comment for why that
     /// distinction matters).
@@ -61,7 +61,7 @@ final class BreakingAlertStore {
         try? context.save()
     }
 
-    /// Default retention: 7 days - alerts are ephemeral by design, unlike
+    /// Default retention: 7 days; alerts are ephemeral by design, unlike
     /// the 30-day brief history. Runs once per launch alongside
     /// `BriefStore.pruneOldBriefs()`, never mid-session, for the same
     /// reason: deleting an object a view might still be rendering crashes.

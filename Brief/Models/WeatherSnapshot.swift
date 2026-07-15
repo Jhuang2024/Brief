@@ -1,7 +1,7 @@
 import Foundation
 
 /// Weather values taken directly from Open-Meteo. Numbers are rendered
-/// straight from this snapshot - the model only writes `practicalNote`.
+/// straight from this snapshot; the model only writes `practicalNote`.
 struct WeatherSnapshot: Codable, Hashable {
     var locationName: String
     var latitude: Double

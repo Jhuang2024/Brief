@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Compact stack of unread hourly breaking-check alerts, shown above the
-/// brief. Deliberately terse - this is meant to be scanned and dismissed
+/// brief. Deliberately terse: this is meant to be scanned and dismissed
 /// in a second or two, not read like a brief story.
 struct BreakingAlertsSection: View {
     let alerts: [BreakingAlert]

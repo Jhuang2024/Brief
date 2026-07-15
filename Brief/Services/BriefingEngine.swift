@@ -17,7 +17,7 @@ final class BriefingEngine {
         let id: String
         let title: String
         var status: Status = .pending
-        /// When this phase became active - lets the progress view show a
+        /// When this phase became active: lets the progress view show a
         /// live elapsed-time counter instead of a static spinner, so a
         /// long-but-still-working retry is visibly distinguishable from
         /// an actual freeze.
@@ -44,7 +44,7 @@ final class BriefingEngine {
     /// provider silently hanging, or retries stacking up past what's
     /// reasonable for someone actively watching the screen) fails
     /// cleanly instead of leaving the progress view on a single static
-    /// phase indefinitely - which reads as a frozen app even though the
+    /// phase indefinitely, which reads as a frozen app even though the
     /// UI thread itself is never actually blocked.
     private nonisolated static func withTimeout<T: Sendable>(
         seconds: TimeInterval,
@@ -69,7 +69,7 @@ final class BriefingEngine {
     /// `max_tokens` field at all, several OpenRouter-hosted free/open-weight
     /// endpoints (confirmed with the openai/gpt-oss-120b and gpt-oss-20b
     /// free tiers) fall back to a modest hosting default rather than
-    /// "however much the schema needs" - the editor's response in
+    /// "however much the schema needs": the editor's response in
     /// particular, a full day's brief across every enabled section, easily
     /// exceeds that default, gets cut off mid-JSON, and fails to decode
     /// with a generic "data couldn't be read" error. That failure then
@@ -80,7 +80,7 @@ final class BriefingEngine {
     private static let editorMaxTokens = 8000
 
     /// A free-tier model generating up to `editorMaxTokens` worth of
-    /// output can genuinely take a while under load - the previous fixed
+    /// output can genuinely take a while under load; the previous fixed
     /// 45-second timeout was tuned for a small/default-length response and
     /// started tripping on "Editing took too long" as soon as the cap
     /// above was raised, even though the request was still actively
@@ -110,7 +110,7 @@ final class BriefingEngine {
     private var generationTask: Task<DailyBrief?, Never>?
 
     /// Keeps a generation running for a little while after the user
-    /// backgrounds the app (e.g. swiping up without force-quitting) -
+    /// backgrounds the app (e.g. swiping up without force-quitting);
     /// without this, iOS suspends the process almost immediately and an
     /// in-flight research/editor request just silently stops partway
     /// through. iOS grants a limited window (historically on the order of
@@ -139,13 +139,13 @@ final class BriefingEngine {
 
     /// Automatic generation happens under exactly two conditions: it's at
     /// or after the configured morning time and today's brief doesn't
-    /// exist yet (covers the morning notification tap - which only fires
-    /// at that time - and opening the app after it with nothing generated
+    /// exist yet (covers the morning notification tap, which only fires
+    /// at that time, and opening the app after it with nothing generated
     /// yet), or the caller is a manual refresh (which goes through
     /// `generate(trigger:)` directly,
     /// bypassing this gate entirely). A brief that already exists is
     /// never auto-regenerated just because it's gotten old during the
-    /// day - deliberately, so the app doesn't spend API credits on its
+    /// day, deliberately, so the app doesn't spend API credits on its
     /// own. Only a manual refresh does that from that point on.
     func generateIfNeeded(trigger: Trigger) async {
         guard store.todaysBrief() == nil else { return }
@@ -234,7 +234,7 @@ final class BriefingEngine {
         )
         let overallStart = Date()
 
-        // Stage 1 - local context.
+        // Stage 1: local context.
         markPhase("checking_today", .done)
 
         async let calendarFetch = fetchCalendarContext(preferences: preferences)
@@ -267,7 +267,7 @@ final class BriefingEngine {
             recentMemory: store.recentStoryMemory()
         )
 
-        // Stage 2 - concurrent web-grounded research. A partial failure must
+        // Stage 2: concurrent web-grounded research. A partial failure must
         // not cancel the successful requests.
         let groups = enabledResearchGroups(preferences: preferences)
         var packets: [ResearchPacket] = []
@@ -280,7 +280,7 @@ final class BriefingEngine {
                 taskGroup.addTask {
                     // Stagger the concurrent research calls slightly so
                     // they don't all land on the provider in the same
-                    // instant - free-tier models in particular have
+                    // instant: free-tier models in particular have
                     // strict per-minute burst limits, and a same-instant
                     // burst of up to six calls is exactly what trips them.
                     if index > 0 {
@@ -333,7 +333,7 @@ final class BriefingEngine {
             return nil
         }
 
-        // Stage 3 - editorial synthesis, with one repair attempt on
+        // Stage 3: editorial synthesis, with one repair attempt on
         // invalid structured output.
         markPhase("editing", .active)
         let editorOutcome: (response: EditorResponse, modelUsed: String)
@@ -363,7 +363,7 @@ final class BriefingEngine {
             return nil
         }
 
-        // Stage 4 - validate; Stage 5 - persist.
+        // Stage 4: validate; Stage 5: persist.
         markPhase("finishing", .active)
         let brief = assembleBrief(
             editor: editorOutcome.response,
@@ -473,11 +473,11 @@ final class BriefingEngine {
     }
 
     /// Recent inbox mail for the Email section. Three distinct outcomes on
-    /// purpose: fetched (available, possibly empty - a quiet night is real
-    /// information), silently unavailable (Gmail simply not granted - an
+    /// purpose: fetched (available, possibly empty: a quiet night is real
+    /// information), silently unavailable (Gmail simply not granted, an
     /// ordinary configuration, so no failure note and the brief stays
     /// `complete`; the section itself explains how to connect), and failed
-    /// (granted but the fetch errored - that IS worth a failure note).
+    /// (granted but the fetch errored, that IS worth a failure note).
     /// Email content never reaches the AI providers: it goes straight from
     /// here into the persisted brief and is rendered verbatim, like weather
     /// numbers.
@@ -601,7 +601,7 @@ final class BriefingEngine {
             candidate.citationVerified = verified
             // When web search actually ran, a candidate whose URL matches
             // none of the real citations almost certainly wasn't found
-            // through search at all - it's fabricated, often a stale,
+            // through search at all: it's fabricated, often a stale,
             // well-known past event recalled from training data and
             // dressed up with a fake recent date. Drop it outright rather
             // than forwarding it to the editor as a fallback option; the
@@ -637,7 +637,7 @@ final class BriefingEngine {
         diagnostics: inout GenerationDiagnostics
     ) async throws -> (response: EditorResponse, modelUsed: String) {
         // Captured as a local rather than referenced as self.openRouter
-        // inside the @Sendable closures below - capturing self (a
+        // inside the @Sendable closures below: capturing self (a
         // MainActor-isolated, non-Sendable reference type) from an
         // instance method would be a concurrency-checking error;
         // capturing the plain-struct value directly is not.
@@ -703,7 +703,7 @@ final class BriefingEngine {
                 response = try Self.decodeEditor(repair.content)
             } catch let repairDecodeError {
                 // Both the original and the one repair attempt produced
-                // output that doesn't decode - surface a clear, actionable
+                // output that doesn't decode: surface a clear, actionable
                 // message here rather than letting Swift's generic
                 // DecodingError.localizedDescription ("The data couldn't
                 // be read because it isn't in the correct format.") reach
@@ -734,7 +734,7 @@ final class BriefingEngine {
     }
 
     /// A short, non-secret preview of a model's raw response for
-    /// diagnostics only - never shown directly to the user, but exported
+    /// diagnostics only; never shown directly to the user, but exported
     /// diagnostics need to show what actually came back to be debuggable.
     private nonisolated static func diagnosticSnippet(_ content: String) -> String {
         String(content.prefix(600))
@@ -756,7 +756,7 @@ final class BriefingEngine {
 
     /// Finds the first `{` and walks forward tracking brace depth (and
     /// string-literal state, so a `{`/`}` inside a quoted value doesn't
-    /// throw off the count) to the matching closing `}` - unlike a naive
+    /// throw off the count) to the matching closing `}`, unlike a naive
     /// "first `{` to last `}`" scan, this isn't fooled by a model that
     /// ignores the "no prose" instruction and appends commentary
     /// containing its own stray braces after the real JSON object, which
@@ -794,7 +794,7 @@ final class BriefingEngine {
 
     /// A trailing comma before a closing `}`/`]` is invalid JSON but a
     /// common thing for a model to emit, especially free/open-weight ones
-    /// with looser structured-output support - strip it rather than let a
+    /// with looser structured-output support: strip it rather than let a
     /// single stray comma fail the whole decode.
     private nonisolated static func removeTrailingCommas(_ json: String) -> String {
         guard let regex = try? NSRegularExpression(pattern: ",(\\s*[}\\]])") else { return json }

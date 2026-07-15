@@ -50,7 +50,7 @@ final class TodayViewModel {
     /// Waits for launch setup (notably Google session restore) first, so
     /// generation doesn't race ahead and see Calendar as disconnected
     /// just because the previous Google session hadn't finished loading
-    /// yet - `ensureLaunched()` is memoized, so this is a no-op if launch
+    /// yet: `ensureLaunched()` is memoized, so this is a no-op if launch
     /// setup already finished.
     func onAppear() async {
         reloadFromStore()
@@ -102,7 +102,7 @@ final class TodayViewModel {
         guard !engine.isGenerating else { return }
         Haptics.tap()
         Task {
-            // Wait for launch setup - notably the Google session restore -
+            // Wait for launch setup, notably the Google session restore,
             // before generating, exactly as onAppear() does. Without this, a
             // manual refresh fired before the previous Google session finished
             // restoring would generate a brief that wrongly reports Calendar

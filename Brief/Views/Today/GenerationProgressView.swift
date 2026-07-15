@@ -37,7 +37,7 @@ struct GenerationProgressView: View {
                             .foregroundStyle(phase.status == .pending ? Color.inkSecondary : Color.ink)
                         Spacer()
                         // A visibly ticking counter proves the phase is
-                        // still alive during a long retry - a static
+                        // still alive during a long retry: a static
                         // spinner alone reads as frozen past a few
                         // seconds even when it isn't.
                         if phase.status == .active, let startedAt = phase.startedAt {

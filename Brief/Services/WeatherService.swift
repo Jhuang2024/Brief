@@ -1,7 +1,7 @@
 import Foundation
 
 /// Open-Meteo client. Weather numbers shown in the app come straight
-/// from this response - the model never rewrites them.
+/// from this response; the model never rewrites them.
 struct WeatherService {
     enum WeatherError: LocalizedError {
         case badResponse

@@ -31,10 +31,10 @@ struct HistoryView: View {
                 }
             }
             .toolbar {
-                // isDeletingAll checked independently of briefs.isEmpty -
+                // isDeletingAll checked independently of briefs.isEmpty:
                 // deleteAll() clears briefs immediately (before the
                 // underlying delete even runs, to avoid a SwiftData
-                // crash - see its doc comment), so by the time deletion
+                // crash, see its doc comment), so by the time deletion
                 // is actually in progress the list is already empty and
                 // the trailing branch below would otherwise hide the
                 // spinner right when it's most useful.

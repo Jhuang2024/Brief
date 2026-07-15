@@ -69,7 +69,7 @@ struct SectionsSettingsView: View {
 }
 
 /// Editable interest lists: topics, companies, people, F1, sports,
-/// universities, excluded keywords - plus the spoiler toggle.
+/// universities, excluded keywords, plus the spoiler toggle.
 struct InterestsSettingsView: View {
     @Environment(AppEnvironment.self) private var environment
 

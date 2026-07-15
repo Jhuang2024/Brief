@@ -58,7 +58,7 @@ enum BriefingPrompts {
 
     Use web search results to find genuine, current developments. Report only what the sources actually say. Never invent a URL, publication, quote, score, date, market price, event time, or citation. Every candidate must cite the URL of a page you actually found through search.
 
-    Do not rely on memorized/training knowledge for any specific fact, score, or result. Your training data includes many real past events (a past season's championship result, an old product launch, a prior earnings report) that can resemble a current one. Before reporting anything as a recent development, confirm from the actual search results you received that it happened within the stated research window - if you cannot point to a search result confirming that, do not include it, even if you recall a similar-sounding event. When in doubt, omit rather than guess.
+    Do not rely on memorized/training knowledge for any specific fact, score, or result. Your training data includes many real past events (a past season's championship result, an old product launch, a prior earnings report) that can resemble a current one. Before reporting anything as a recent development, confirm from the actual search results you received that it happened within the stated research window; if you cannot point to a search result confirming that, do not include it, even if you recall a similar-sounding event. When in doubt, omit rather than guess.
 
     Prefer primary and authoritative sources: government agencies, companies' official announcements, sports governing bodies, teams, universities, research institutions, established news organizations, and high-quality specialist publications. Avoid aggregation sites when an original source exists.
 
@@ -282,7 +282,7 @@ enum BriefingPrompts {
         lines.append("")
 
         // Enabled sections and limits.
-        lines.append("Enabled sections, in order, with hard maximum story counts (maximums, not quotas - if only one story is genuinely worthwhile, return one; if none, omit the section):")
+        lines.append("Enabled sections, in order, with hard maximum story counts (maximums, not quotas: if only one story is genuinely worthwhile, return one; if none, omit the section):")
         for section in prefs.enabledSections {
             lines.append("- \(section.category.rawValue) (\"\(section.title)\"): max \(prefs.effectiveMaxStories(for: section.category)) stories")
         }
@@ -295,7 +295,7 @@ enum BriefingPrompts {
         // Weather (numbers rendered by the app; model writes only the note).
         if let weather = context.weather {
             lines.append("""
-            Weather (from Open-Meteo; the app renders these numbers directly - do not restate or alter them, \
+            Weather (from Open-Meteo; the app renders these numbers directly: do not restate or alter them, \
             only write practicalWeatherNote as one literal line such as "Rain likely after 3 PM." or "No rain expected."):
             \(weatherJSON(weather))
             """)
@@ -351,7 +351,7 @@ enum BriefingPrompts {
         lines.append("")
         lines.append("""
         Produce the briefing now. The overview is a concise editorial "day in one minute" answering: what materially happened, \
-        what changed, and what is likely to matter today - including, briefly, Jerry's schedule and anything time-sensitive. \
+        what changed, and what is likely to matter today, including, briefly, Jerry's schedule and anything time-sensitive. \
         It is not a list of conversation starters.
         """)
         return lines.joined(separator: "\n")

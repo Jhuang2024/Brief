@@ -3,7 +3,7 @@ import Foundation
 /// One inbox message shown in the brief's Email section, faithful to what
 /// Gmail returned: sender, subject, Gmail's own snippet, and read state.
 /// Persisted on `DailyBrief` as a JSON blob (like calendar events and
-/// weather), and rendered verbatim - email content is never sent to any AI
+/// weather), and rendered verbatim. Email content is never sent to any AI
 /// provider.
 struct EmailMessage: Codable, Equatable, Identifiable {
     var id: String

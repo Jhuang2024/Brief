@@ -9,7 +9,7 @@ import os
 ///    launch, copy whatever raw store files already exist into the backups
 ///    directory before SwiftData gets a chance to open (and possibly
 ///    migrate) them. A byte-for-byte safety net that doesn't depend on the
-///    container opening successfully, since it runs first - which is also
+///    container opening successfully, since it runs first, which is also
 ///    what makes it complementary to BackupService's JSON archives, which
 ///    can only be built once the store has opened. This matters doubly
 ///    here because AppEnvironment falls back to an in-memory store when

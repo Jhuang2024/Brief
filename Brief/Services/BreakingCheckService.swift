@@ -3,7 +3,7 @@ import Foundation
 /// Best-effort, cost-capped watcher that runs roughly once an hour,
 /// separate from the daily brief pipeline. Deliberately NOT another brief:
 /// one small completion call with a strict, very-high-bar schema, and in
-/// the overwhelming majority of hours it finds nothing and does nothing -
+/// the overwhelming majority of hours it finds nothing and does nothing:
 /// no alert saved, no notification sent, no further cost. This is the only
 /// thing in the app allowed to touch the network outside the two brief
 /// generation triggers (morning time, manual refresh).
@@ -11,7 +11,7 @@ import Foundation
 @Observable
 final class BreakingCheckService {
     /// Slightly under an hour so a BGAppRefreshTask firing a bit early, or
-    /// the app being opened mid-hour, doesn't get silently skipped - while
+    /// the app being opened mid-hour, doesn't get silently skipped, while
     /// still bounding worst-case usage to roughly once an hour.
     private static let minimumInterval: TimeInterval = 55 * 60
 
@@ -38,7 +38,7 @@ final class BreakingCheckService {
 
     /// Entry point for both the hourly background task and a foreground
     /// fallback call. A concurrent caller shares the in-flight check
-    /// rather than starting a second one. Never throws - there is no
+    /// rather than starting a second one. Never throws: there is no
     /// user-facing surface for a failed background check, so a failure
     /// here just means this hour is silently skipped, same as finding
     /// nothing worth reporting.
@@ -121,9 +121,9 @@ final class BreakingCheckService {
 
             // The exact fingerprint above only catches an identical headline +
             // URL + entity set. The same real-world event reworded across
-            // outlets - "Apple files lawsuit accusing OpenAI…" vs "Apple
+            // outlets, "Apple files lawsuit accusing OpenAI…" vs "Apple
             // Accuses OpenAI… in Major Lawsuit", title-case vs sentence-case,
-            // a different source URL - sails right past it, which is how Jerry
+            // a different source URL, sails right past it, which is how Jerry
             // got pinged repeatedly about one story. This token-overlap check
             // treats a headline that substantially restates a recent one as a
             // duplicate and drops it silently.
@@ -132,8 +132,8 @@ final class BreakingCheckService {
             // The token-overlap check above catches the same headline
             // reworded, but an hourly check on a still-unfolding story (an
             // ongoing conflict, a live game, a developing scandal) tends to
-            // produce a genuinely different headline each hour - different
-            // words, same underlying topic - which sails right past a
+            // produce a genuinely different headline each hour, different
+            // words, same underlying topic, which sails right past a
             // wording-based check entirely. Comparing the crude proper-noun
             // "entities" instead (who/what the story is about, rather than
             // how this hour's update happens to phrase it) catches that: if
@@ -156,10 +156,10 @@ final class BreakingCheckService {
             alertStore.save(alert)
             await notificationService.sendBreakingAlertNotification(headline: headline)
         } catch {
-            // Best-effort only: an hourly check failing for any reason -
-            // a timeout, no provider reachable, malformed output, or an
+            // Best-effort only: an hourly check failing for any reason
+            // (a timeout, no provider reachable, malformed output, or an
             // HTTP error such as 402 Payment Required / "insufficient
-            // credits" - is treated exactly the same as finding nothing:
+            // credits") is treated exactly the same as finding nothing:
             // silently skip this hour. Never save an alert or send a
             // notification for a failed check.
         }
@@ -167,7 +167,7 @@ final class BreakingCheckService {
 
     /// Catches the rare case where a provider that's out of credit or
     /// quota returns HTTP 200 with an apology instead of a proper error
-    /// status - the normal error path above only covers a thrown error,
+    /// status: the normal error path above only covers a thrown error,
     /// so this is a second, content-based check on anything that did
     /// decode successfully.
     private static func looksLikeProviderFailure(_ text: String) -> Bool {
@@ -180,7 +180,7 @@ final class BreakingCheckService {
         return markers.contains { lowered.contains($0) }
     }
 
-    /// Whether `candidate` substantially restates any headline in `recent` -
+    /// Whether `candidate` substantially restates any headline in `recent`,
     /// i.e. the same event under different wording. Compares significant-word
     /// sets rather than raw strings, so it is resilient to reordering,
     /// title-case vs sentence-case, and filler words that defeat the exact
@@ -273,7 +273,7 @@ final class BreakingCheckService {
 
     The bar is very high. This is NOT another briefing. In the overwhelming majority of checks, nothing qualifies, and you must return hasAlert: false with every other field left as an empty string. Only return hasAlert: true for something like a major confirmed high-impact development directly and specifically relevant to Jerry's stated interests below: think market-moving news, a materially important announcement from a company or person Jerry follows, or a globally significant event. Never alert for routine updates, incremental news, rumors, minor score changes, opinion pieces, or anything that can just as easily wait for the regular brief.
 
-    For an ongoing story you've likely already alerted on in a previous hourly check (a developing conflict, a live game, an unfolding scandal), do not send another alert just because there's a new incremental development or the story has moved forward a bit - that produces a stream of pings about "the same topic" that Jerry has explicitly said is unwanted. Once something has cleared the bar once, only alert again for that same story if it reaches a genuinely new, distinct threshold of its own (e.g. the conflict result is now final, not just that another hour of it happened).
+    For an ongoing story you've likely already alerted on in a previous hourly check (a developing conflict, a live game, an unfolding scandal), do not send another alert just because there's a new incremental development or the story has moved forward a bit: that produces a stream of pings about "the same topic" that Jerry has explicitly said is unwanted. Once something has cleared the bar once, only alert again for that same story if it reaches a genuinely new, distinct threshold of its own (e.g. the conflict result is now final, not just that another hour of it happened).
 
     Never invent a headline, source, or URL. Any alert must cite a real URL you found through web search.
 
@@ -310,7 +310,7 @@ final class BreakingCheckService {
         Jerry's interests:
         \(interests)
 
-        Stories already covered in the last few days - never re-flag one of these unless there is a major new development since:
+        Stories already covered in the last few days: never re-flag one of these unless there is a major new development since:
         \(alreadyCovered)
 
         Check whether anything has happened recently that is urgent enough to interrupt Jerry right now.

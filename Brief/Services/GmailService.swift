@@ -4,7 +4,7 @@ import Foundation
 /// same auth service, same bearer-token GET helper, same "faithful to the
 /// API, no interpretation" stance. Fetches recent inbox messages for the
 /// brief's Email section. Message content never goes anywhere except the
-/// rendered section - not to the AI providers, not into diagnostics.
+/// rendered section: not to the AI providers, not into diagnostics.
 @MainActor
 struct GmailService {
     enum GmailError: LocalizedError {

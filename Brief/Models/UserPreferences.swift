@@ -3,7 +3,7 @@ import SwiftUI
 
 /// A built-in AI provider Brief knows how to reach. Each has its own
 /// Keychain-stored key and fixed base URL, so both can be configured at
-/// once - generation tries `preferredProvider` first and automatically
+/// once: generation tries `preferredProvider` first and automatically
 /// retries with the other one (if it has a saved key) on failure.
 enum AIProvider: String, Codable, CaseIterable, Identifiable {
     case openRouter, bazaarlink
@@ -164,7 +164,7 @@ struct UserPreferences: Codable, Equatable {
     var notificationsEnabled: Bool = true
     /// Hourly best-effort check for news urgent enough to interrupt the
     /// day, separate from and much cheaper than the daily brief. Off
-    /// disables the background check entirely - no API calls, no alerts.
+    /// disables the background check entirely: no API calls, no alerts.
     var breakingAlertsEnabled: Bool = true
     var includeWhyItMatters: Bool = true
     var includeCalendar: Bool = true
@@ -202,7 +202,7 @@ struct UserPreferences: Codable, Equatable {
     var preferOfficialSources: Bool = true
     var requireMultipleSourcesForBreaking: Bool = true
 
-    // AI Provider - both OpenRouter and Bazaarlink can hold a saved key
+    // AI Provider: both OpenRouter and Bazaarlink can hold a saved key
     // at once. Generation tries preferredProvider first and automatically
     // retries with the other one if it has a saved key and the first
     // attempt fails. Structured JSON-schema output and the web-search
@@ -220,7 +220,7 @@ struct UserPreferences: Codable, Equatable {
     // on-device across several rebuilds) turned out too unreliable for a
     // brief that only gets one shot a day. gpt-4o-mini costs a small
     // fraction of a cent per generation and has solid, consistent JSON
-    // schema support - reliability was worth trading the "free" part away
+    // schema support. Reliability was worth trading the "free" part away
     // for. "openai:free" is still available as a manual choice in
     // Settings → Models if cost ever matters more than reliability again.
     var researchModel: String = "openai/gpt-4o-mini"
@@ -247,7 +247,7 @@ struct UserPreferences: Codable, Equatable {
         )
     }
 
-    /// `preferredProvider` first, then the other built-in provider -
+    /// `preferredProvider` first, then the other built-in provider,
     /// only including ones that actually have a saved key.
     var providerAttemptOrder: [AIProvider] {
         [preferredProvider, preferredProvider.fallback].filter {
@@ -334,7 +334,7 @@ final class PreferencesStore {
             // didSet doesn't fire for a property's own initial-value
             // assignment in init(), so a migration wouldn't otherwise
             // reach disk until some unrelated setting change happened to
-            // trigger a save - write it back explicitly right away.
+            // trigger a save; write it back explicitly right away.
             if migrated != decoded {
                 save()
             }
@@ -347,7 +347,7 @@ final class PreferencesStore {
     }
 
     /// One-time migration for defaults that turned out to be a bad choice
-    /// after already shipping - changing UserPreferences.default only
+    /// after already shipping: changing UserPreferences.default only
     /// affects fresh installs, so a phone that already saved an old
     /// default keeps using it forever otherwise, since nothing here ever
     /// rewrites an already-saved preference on its own. This only touches
@@ -361,13 +361,13 @@ final class PreferencesStore {
     /// - `openai/gpt-oss-120b:free`: gets upstream-rate-limited under real
     ///   demand when pinned alone.
     /// - `auto:free`: OpenRouter's own "route to any free model" auto
-    ///   selection landed on deepseek/deepseek-v4-flash - not what "free"
+    ///   selection landed on deepseek/deepseek-v4-flash, not what "free"
     ///   was meant to mean here.
     /// - `openai:free` (gpt-oss-120b/20b fallback pair): repeatedly
     ///   returned structured output that failed to decode even after the
     ///   one repair attempt, across several rebuilds.
     ///
-    /// All three migrate straight to `openai/gpt-4o-mini` - a paid model,
+    /// All three migrate straight to `openai/gpt-4o-mini`, a paid model,
     /// but one with consistent JSON schema support and a per-generation
     /// cost small enough not to matter for a once-a-day brief.
     private static func migratingKnownStaleModelDefaults(_ preferences: UserPreferences) -> UserPreferences {
@@ -414,7 +414,7 @@ final class PreferencesStore {
     }
 
     /// Plain `Codable` synthesis does not apply a stored property's
-    /// default value to a key missing from the decoded JSON - it just
+    /// default value to a key missing from the decoded JSON; it just
     /// fails to decode. Since every new preference added over time is a
     /// non-optional field with a default, decoding an older saved blob
     /// as-is would throw, and the `try?` in `init()` would silently

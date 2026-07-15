@@ -358,7 +358,7 @@ struct SettingsView: View {
         } header: {
             FormSectionHeader(title: "Backups")
         } footer: {
-            Text("Backups are taken automatically whenever your data changes and whenever the app goes to the background - the last \(BackupService.maxBackupsKept) are kept, plus the most complete one, and each is mirrored to the shared App Group container so it survives app updates and reinstalls. They cover your briefing history, alerts, and preferences; API keys stay in the Keychain and are never in a backup.")
+            Text("Backups are taken automatically whenever your data changes and whenever the app goes to the background: the last \(BackupService.maxBackupsKept) are kept, plus the most complete one, and each is mirrored to the shared App Group container so it survives app updates and reinstalls. They cover your briefing history, alerts, and preferences; API keys stay in the Keychain and are never in a backup.")
                 .foregroundStyle(Color.inkSecondary)
         }
     }
@@ -423,7 +423,7 @@ struct SettingsView: View {
 
 /// Both providers can hold a saved key at once. Generation tries the
 /// preferred provider first and automatically retries with the other one
-/// if it has a saved key and the first attempt fails - "use whichever one
+/// if it has a saved key and the first attempt fails: "use whichever one
 /// works." Neither key is ever displayed back once saved; both live only
 /// in the Keychain.
 struct AIProviderView: View {
