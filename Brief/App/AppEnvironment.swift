@@ -95,6 +95,13 @@ final class AppEnvironment {
             return
         }
         let task = Task {
+            // If an update/reinstall wiped the store, silently restore the
+            // most complete backup (including the App Group mirrors that
+            // survive a reinstall) before anything else touches the store.
+            BackupService.autoRestoreOnEmptyLaunch(
+                context: modelContainer.mainContext,
+                preferencesStore: preferencesStore
+            )
             await briefStore.pruneOldBriefs()
             await alertStore.pruneOld()
             backgroundRefresh.scheduleNextBreakingCheck()

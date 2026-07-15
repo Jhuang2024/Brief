@@ -83,6 +83,10 @@ final class BriefStore {
     /// `Task.yield()` calls keeps the UI responsive (spinners animate,
     /// touches still register) across the same total work.
     func deleteAllHistory() async {
+        // The user is deliberately clearing everything: mark it so the next
+        // launch's automatic empty-store recovery doesn't quietly restore
+        // what they just deleted.
+        BackupService.markFreshStartChosen()
         let all = allBriefs()
         for (index, brief) in all.enumerated() {
             context.delete(brief)

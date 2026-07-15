@@ -461,6 +461,55 @@ enum BackupService {
             + ((try? context.fetchCount(FetchDescriptor<BreakingAlert>())) ?? 0)
     }
 
+    // MARK: - Automatic restore on empty launch
+
+    private static let userChoseFreshStartKey = "brief.userChoseFreshStart"
+
+    /// Set when the user deliberately wipes everything ("Delete all history"),
+    /// so the empty store they asked for isn't treated as a wipe to recover
+    /// from on the next launch. Cleared automatically the moment real data
+    /// exists again (a new brief, or a restore).
+    static var userChoseFreshStart: Bool {
+        UserDefaults.standard.bool(forKey: userChoseFreshStartKey)
+    }
+
+    static func markFreshStartChosen() {
+        UserDefaults.standard.set(true, forKey: userChoseFreshStartKey)
+    }
+
+    /// When Brief launches and finds its store empty — the signature of an
+    /// update/reinstall that replaced the app container and wiped the sandbox
+    /// — silently restore the most complete backup we still have, including
+    /// the App Group mirrors that survive a reinstall. No user tap: the same
+    /// automatic recovery Social Climber and LockedInFit already do on launch.
+    /// It never runs when the store already has data, and never right after
+    /// the user chose "Delete all history" (see `userChoseFreshStart`).
+    /// Returns the number of records restored (0 when nothing was). Runs on the
+    /// main context because a restore inserts records the live UI must see.
+    @MainActor
+    @discardableResult
+    static func autoRestoreOnEmptyLaunch(context: ModelContext, preferencesStore: PreferencesStore) -> Int {
+        guard currentRecordCount(context: context) == 0 else {
+            // Real data present: this launch is not a wipe, and any earlier
+            // "start fresh" intent no longer applies.
+            UserDefaults.standard.set(false, forKey: userChoseFreshStartKey)
+            return 0
+        }
+        guard !userChoseFreshStart else { return 0 }
+        // The most complete backup known anywhere; after a true reinstall the
+        // only survivors are the shared-container mirrors.
+        guard let best = allKnownBackups().first(where: { $0.recordCount > 0 }) else { return 0 }
+        // Re-confirm the store is still empty right before writing, so a brief
+        // generated in the meantime is never overwritten.
+        guard currentRecordCount(context: context) == 0 else { return 0 }
+        switch restore(from: best, context: context, preferencesStore: preferencesStore, currentRecordCount: 0) {
+        case .restored(let count, _):
+            return count
+        case .emptyBackupSkipped, .failed:
+            return 0
+        }
+    }
+
     /// Restores a backup into `context`. Import is additive — briefs and
     /// alerts whose ids already exist are skipped, nothing is ever deleted —
     /// so the only real guard needed is refusing to "restore" an empty
