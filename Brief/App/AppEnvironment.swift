@@ -72,6 +72,11 @@ final class AppEnvironment {
             breakingCheckService: breakingCheck
         )
         speech = SpeechService()
+
+        // Take a debounced automatic backup after ANY save reaches the store,
+        // not just the mutation sites that explicitly call scheduleBackupSoon.
+        // See AutoBackupObserver.
+        AutoBackupObserver.start(container: modelContainer)
     }
 
     /// Launch-time work: restore Google, prune history, schedule the
