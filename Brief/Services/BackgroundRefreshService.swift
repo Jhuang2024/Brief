@@ -3,7 +3,7 @@ import Foundation
 
 /// Registers and schedules Brief's one best-effort background task: the
 /// hourly breaking-news check. It's a `BGAppRefreshTask`, which iOS runs at
-/// its own discretion, not on a guaranteed schedule — its absence or
+/// its own discretion, not on a guaranteed schedule - its absence or
 /// lateness should never leave the app in a broken state, only a slightly
 /// stale one that the foreground fallback (`checkIfDue`) picks up next time
 /// the app is opened.

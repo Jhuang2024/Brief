@@ -4,7 +4,7 @@ import Foundation
 /// same auth service, same bearer-token GET helper, same "faithful to the
 /// API, no interpretation" stance. Fetches recent inbox messages for the
 /// brief's Email section. Message content never goes anywhere except the
-/// rendered section — not to the AI providers, not into diagnostics.
+/// rendered section - not to the AI providers, not into diagnostics.
 @MainActor
 struct GmailService {
     enum GmailError: LocalizedError {
@@ -21,10 +21,26 @@ struct GmailService {
     private let session = URLSession.shared
 
     /// Inbox messages received after `since`, newest first, capped at
-    /// `maxResults`. Promotions and social-tab mail are excluded — a
-    /// morning brief wants the mail a person would actually open. The
-    /// category operators are safely inert on accounts without a tabbed
-    /// inbox (excluding a category that doesn't exist excludes nothing).
+    /// `maxResults`. The goal is the mail Jerry would actually open: real
+    /// one-to-one messages and the updates that genuinely matter, not
+    /// newsletters, marketing, or automated digests.
+    ///
+    /// Two filters get there. First, Gmail's Promotions and Social tabs are
+    /// excluded at the query: marketing and network-noise mail Jerry never
+    /// wants in a brief. The category operators are safely inert on accounts
+    /// without a tabbed inbox (excluding a category that doesn't exist
+    /// excludes nothing). The Updates tab is deliberately kept, because that
+    /// is where the important transactional mail lands (security notices,
+    /// receipts, shipping, 2FA) and Jerry asked to keep "important updates."
+    ///
+    /// Second, and this is what removes the newsletter/digest flood, any
+    /// message carrying a `List-Unsubscribe` header is dropped. Bulk senders
+    /// (newsletters, marketing, news digests, job-alert blasts) are required
+    /// to include it; genuine one-to-one mail, and the important transactional
+    /// updates worth keeping, generally don't. This catches bulk mail
+    /// wherever it sits, including the Updates tab and anything mis-filed into
+    /// Primary. The list request over-fetches so the header filter still
+    /// leaves a full section.
     func fetchInboxMessages(since: Date, maxResults: Int = 10) async throws -> [EmailMessage] {
         let token = try await auth.accessToken(requiring: GoogleAuthenticationService.gmailReadOnlyScope)
 
@@ -34,7 +50,10 @@ struct GmailService {
                 name: "q",
                 value: "in:inbox -category:promotions -category:social after:\(Int(since.timeIntervalSince1970))"
             ),
-            URLQueryItem(name: "maxResults", value: String(maxResults)),
+            // Over-fetch: the List-Unsubscribe filter below removes bulk mail
+            // that slipped past the category exclusions, so ask for more IDs
+            // than we intend to show and trim after filtering.
+            URLQueryItem(name: "maxResults", value: String(min(maxResults * 3, 40))),
         ]
         let listData = try await get(components.url!, token: token)
         let list = try JSONDecoder().decode(MessageListResponse.self, from: listData)
@@ -43,7 +62,8 @@ struct GmailService {
 
         // Metadata-only per-message fetches (headers + snippet, never the
         // body), concurrently since each is an independent small request.
-        // One broken message must not sink the rest.
+        // A message that reads as bulk, or that fails to load, resolves to
+        // nil and is dropped; one broken message must not sink the rest.
         let messages = await withTaskGroup(of: EmailMessage?.self) { group in
             for id in ids {
                 group.addTask { [session] in
@@ -56,7 +76,7 @@ struct GmailService {
             }
             return collected
         }
-        return messages.sorted { $0.receivedAt > $1.receivedAt }
+        return Array(messages.sorted { $0.receivedAt > $1.receivedAt }.prefix(maxResults))
     }
 
     private nonisolated static func fetchMessage(
@@ -67,6 +87,8 @@ struct GmailService {
             URLQueryItem(name: "format", value: "metadata"),
             URLQueryItem(name: "metadataHeaders", value: "From"),
             URLQueryItem(name: "metadataHeaders", value: "Subject"),
+            // Presence alone marks bulk mail; the value is never shown.
+            URLQueryItem(name: "metadataHeaders", value: "List-Unsubscribe"),
         ]
         var request = URLRequest(url: components.url!)
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
@@ -77,6 +99,12 @@ struct GmailService {
         let decoded = try JSONDecoder().decode(MessageResponse.self, from: data)
 
         let headers = decoded.payload?.headers ?? []
+        // Bulk mail (newsletters, marketing, automated digests) is required
+        // to carry List-Unsubscribe; genuine one-to-one mail doesn't. Drop
+        // it so the section stays real messages and updates worth reading.
+        if headers.contains(where: { $0.name.caseInsensitiveCompare("List-Unsubscribe") == .orderedSame }) {
+            return nil
+        }
         let from = headers.first { $0.name.caseInsensitiveCompare("From") == .orderedSame }?.value ?? ""
         let subject = headers.first { $0.name.caseInsensitiveCompare("Subject") == .orderedSame }?.value ?? ""
         let (name, address) = parseFrom(from)

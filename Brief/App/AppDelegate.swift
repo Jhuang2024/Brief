@@ -26,7 +26,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     // Tapping the morning reminder opens Today; the cached brief renders
     // immediately and generation starts if it is missing. Tapping a
     // breaking alert also opens Today, but must never trigger a full
-    // brief generation — the alert is already stored and shown inline,
+    // brief generation - the alert is already stored and shown inline,
     // and generating a brief was never one of the two conditions that are
     // allowed to spend API credits.
     func userNotificationCenter(
@@ -42,7 +42,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             if !isBreakingAlert {
                 // Tapping the morning reminder can cold-launch the app, so
                 // the previous Google session hasn't been restored into this
-                // process yet — GIDSignIn's currentUser is nil until
+                // process yet - GIDSignIn's currentUser is nil until
                 // ensureLaunched() runs. Without awaiting it first, this
                 // notification-triggered generation races ahead and bakes a
                 // false "Calendar unavailable" into the very brief the tap

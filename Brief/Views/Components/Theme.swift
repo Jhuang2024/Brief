@@ -125,7 +125,7 @@ enum AppearanceConfiguration {
         UISwitch.appearance().onTintColor = accent
     }
 
-    /// New York (serif design), bold, at the system large-title point size —
+    /// New York (serif design), bold, at the system large-title point size -
     /// gives every screen's nav title the same editorial voice as the
     /// masthead instead of the system sans-serif default.
     private static var largeTitleSerifFont: UIFont {

@@ -2,7 +2,7 @@
 import Foundation
 
 /// A realistic sample briefing for SwiftUI previews and the debug-only
-/// "Load sample briefing" button — so the interface can be exercised
+/// "Load sample briefing" button - so the interface can be exercised
 /// without spending OpenRouter credits. Never used in release builds.
 enum SampleBrief {
     @MainActor
@@ -112,7 +112,7 @@ enum SampleBrief {
                 "Anthropic publishes interpretability results for production-scale models",
                 "The company released research tracing safety-relevant features in a frontier model, together with tooling it says it now runs on production systems. The paper and code went out overnight.",
                 "If feature-level auditing works at production scale, it changes what regulators can reasonably ask of frontier labs, and gives safety teams a concrete artifact to standardize around.",
-                context: "This extends the dictionary-learning line of work from 2024–25. The notable claim is operational use, not just a lab demo.",
+                context: "This extends the dictionary-learning line of work from 2024-25. The notable claim is operational use, not just a lab demo.",
                 status: .official, importance: 0.9, order: 0,
                 sources: [source("Interpretability at scale", "anthropic.com", "research/interpretability-scale")],
                 category: "technology_ai"
@@ -156,7 +156,7 @@ enum SampleBrief {
             timezoneIdentifier: TimeZone.current.identifier,
             locationName: "Berkeley, CA",
             overviewItems: [
-                "A quiet overnight globally, with one exception: the EU–Indonesia trade agreement finally closed after ten years, and ratification now moves to parliaments this fall.",
+                "A quiet overnight globally, with one exception: the EU-Indonesia trade agreement finally closed after ten years, and ratification now moves to parliaments this fall.",
                 "In AI, Anthropic's interpretability release is the story that matters. It claims production-scale feature auditing, which shifts the safety-regulation conversation from theory to tooling.",
                 "Nvidia says data-centre GPU lead times are under three months; cheaper, faster compute access ripples through every startup budget you follow.",
                 "F1 is back this weekend at Silverstone. Practice starts Friday early morning Pacific time, and Piastri defends a 14-point lead.",

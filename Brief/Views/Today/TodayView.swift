@@ -70,7 +70,7 @@ struct TodayView: View {
     private func briefScroll(_ brief: DailyBrief) -> some View {
         ScrollView {
             // Explicit width constraint on the whole column, defensively
-            // — any child that doesn't clamp its own width (a horizontal
+            // - any child that doesn't clamp its own width (a horizontal
             // ScrollView chief among them; fixed in TodayStripView) would
             // otherwise be able to widen this VStack past the screen and
             // make the entire vertical ScrollView pannable sideways.
@@ -170,7 +170,7 @@ struct TodayView: View {
     private func partialBanner(_ brief: DailyBrief) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             // The generic heading intentionally doesn't restate "could not
-            // be updated" — brief.failureNotes already spells that out
+            // be updated" - brief.failureNotes already spells that out
             // per-section right below (e.g. "Some sections could not be
             // updated: World news."), and a fixed label repeating almost
             // the same sentence read as a duplicated message.

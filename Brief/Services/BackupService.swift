@@ -3,8 +3,8 @@ import Foundation
 import SwiftData
 import UIKit
 
-/// Automatic and manual local backups of Brief's own data — the briefing
-/// history, breaking alerts, and preferences — written as a versioned JSON
+/// Automatic and manual local backups of Brief's own data - the briefing
+/// history, breaking alerts, and preferences - written as a versioned JSON
 /// archive into a directory of their own, separate from both the live
 /// SwiftData store and the App Group container. API keys live in the
 /// Keychain and are never part of an archive.
@@ -20,7 +20,7 @@ import UIKit
 ///
 /// Automatic backups run, debounced, after ANY save reaches the store:
 /// `AutoBackupObserver` watches `ModelContext.didSave`, and mutation sites
-/// also report changes via `scheduleBackupSoon` — a brief generating, a
+/// also report changes via `scheduleBackupSoon` - a brief generating, a
 /// breaking alert landing. There is no minimum-interval throttle: a burst of
 /// saves coalesces through the debounce, and the content-hash dedupe below
 /// turns a save that changed nothing observable into a cheap no-op, so
@@ -33,7 +33,7 @@ import UIKit
 /// Important boundary to be honest about: local backups live inside this
 /// app's own sandbox, so they protect against in-app mistakes but NOT
 /// against a genuine uninstall, which wipes the sandbox, backups included.
-/// That's what the App Group mirrors are for — they live in the shared
+/// That's what the App Group mirrors are for - they live in the shared
 /// container, which has its own lifecycle and survives updates/reinstalls.
 enum BackupService {
     static let maxBackupsKept = 5
@@ -78,7 +78,7 @@ enum BackupService {
     /// Data blobs (calendar events, weather, linked-app digests) are copied
     /// byte-for-byte rather than re-modeled, so a restore reproduces exactly
     /// what the brief showed. `preferencesData` is the saved preferences
-    /// blob as persisted — which, like the live copy, never contains keys.
+    /// blob as persisted - which, like the live copy, never contains keys.
     struct Archive: Codable {
         var exportedAt: Date
         var preferencesData: Data?
@@ -173,7 +173,7 @@ enum BackupService {
 
     /// Builds the archive from whatever `context` can see. Every collection
     /// is explicitly sorted so two archives of identical data encode to
-    /// identical bytes — the content-hash dedupe below depends on that.
+    /// identical bytes - the content-hash dedupe below depends on that.
     static func makeArchive(context: ModelContext, now: Date = .now) -> Archive {
         let briefs = (try? context.fetch(FetchDescriptor<DailyBrief>(
             sortBy: [SortDescriptor(\.briefingDate, order: .reverse), SortDescriptor(\.generatedAt, order: .reverse)]
@@ -306,7 +306,7 @@ enum BackupService {
     /// `beginBackgroundTask`: switching to the App Store to tap Update
     /// backgrounds this app immediately, and without an explicit assertion
     /// iOS is free to suspend the process before a plain detached task ever
-    /// gets scheduled — a change made moments before updating would be
+    /// gets scheduled - a change made moments before updating would be
     /// backgrounded-but-never-backed-up. `@MainActor` because the call site
     /// (BriefApp's scenePhase onChange) already is, and `token.begin` must
     /// run synchronously before the detached task starts.
@@ -329,7 +329,7 @@ enum BackupService {
     ///
     /// `forceFreshTimestamp` only matters on the dedupe path: when true, the
     /// existing (content-identical) backup's index entry is bumped to now.
-    /// Only the explicit manual "Back Up Now" tap sets this — the user asked
+    /// Only the explicit manual "Back Up Now" tap sets this - the user asked
     /// for a backup right now and expects to see that confirmed, whereas an
     /// automatic trigger with nothing new to capture should stay silent so
     /// "Latest backup" keeps meaning "when data was last actually captured."
@@ -477,9 +477,9 @@ enum BackupService {
         UserDefaults.standard.set(true, forKey: userChoseFreshStartKey)
     }
 
-    /// When Brief launches and finds its store empty — the signature of an
+    /// When Brief launches and finds its store empty - the signature of an
     /// update/reinstall that replaced the app container and wiped the sandbox
-    /// — silently restore the most complete backup we still have, including
+    /// - silently restore the most complete backup we still have, including
     /// the App Group mirrors that survive a reinstall. No user tap: the same
     /// automatic recovery Social Climber and LockedInFit already do on launch.
     /// It never runs when the store already has data, and never right after
@@ -510,8 +510,8 @@ enum BackupService {
         }
     }
 
-    /// Restores a backup into `context`. Import is additive — briefs and
-    /// alerts whose ids already exist are skipped, nothing is ever deleted —
+    /// Restores a backup into `context`. Import is additive - briefs and
+    /// alerts whose ids already exist are skipped, nothing is ever deleted -
     /// so the only real guard needed is refusing to "restore" an empty
     /// backup onto a store that already has data, which would be a
     /// confusing no-op rather than a real recovery. Preferences are applied
@@ -794,7 +794,7 @@ private actor BackupCoordinator {
 
     /// Runs the debounced automatic backup. If a backup is already in flight,
     /// reschedule shortly rather than overlap; otherwise back up now. There's
-    /// no rate limit — the debounce coalesces bursts and the content-hash
+    /// no rate limit - the debounce coalesces bursts and the content-hash
     /// dedupe skips no-op writes, so an automatic backup can safely follow
     /// every change. (The backgrounding hook additionally captures state
     /// immediately whenever the app leaves the foreground.)
@@ -838,9 +838,9 @@ actor BackupActor {
 }
 
 /// Wraps a `UIBackgroundTaskIdentifier` so begin/end can be called safely
-/// from several different contexts — the caller (main actor), the
+/// from several different contexts - the caller (main actor), the
 /// expiration handler (calling thread not guaranteed), and the backup
-/// Task's own completion (a detached background task) — without racing on
+/// Task's own completion (a detached background task) - without racing on
 /// the stored ID or double-ending it. `begin` runs on the main actor
 /// directly, synchronously, before the detached backup Task starts, so `id`
 /// is always set before anything could try to end it. `end` is

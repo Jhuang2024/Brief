@@ -33,7 +33,7 @@ final class NotificationService {
     }
 
     /// Re-schedule the repeating morning reminder at the configured time.
-    /// Nothing generates the brief until this is tapped — there's no
+    /// Nothing generates the brief until this is tapped - there's no
     /// background pre-generation to silently rely on (iOS never ran it
     /// reliably), so the wording is explicit that opening the app is what
     /// kicks off generation.

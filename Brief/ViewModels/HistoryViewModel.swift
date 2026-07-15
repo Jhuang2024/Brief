@@ -67,7 +67,7 @@ final class HistoryViewModel {
     ///
     /// Clears `briefs` BEFORE the underlying delete runs, not after.
     /// `DailyBrief` is a SwiftData `@Model`, individually
-    /// Observable-tracked — `deleteAllHistory()` yields periodically
+    /// Observable-tracked - `deleteAllHistory()` yields periodically
     /// while it works through a large history, and if the list were
     /// still holding references to those exact objects during that
     /// window, a re-render mid-loop would read a property off an object

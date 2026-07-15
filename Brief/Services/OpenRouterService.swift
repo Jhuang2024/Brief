@@ -1,7 +1,7 @@
 import Foundation
 
 /// Client for an OpenAI-style chat completions API. Each request is sent
-/// against an explicit base URL and API key resolved by the caller —
+/// against an explicit base URL and API key resolved by the caller -
 /// BriefingEngine tries each configured provider (OpenRouter, Bazaarlink)
 /// in order and falls back automatically, so this type has no built-in
 /// notion of "the" provider. Never logs the API key.
@@ -66,7 +66,7 @@ struct OpenRouterService {
 
     /// Run one structured completion against `{baseURL}/chat/completions`.
     /// - Parameters:
-    ///   - apiKey: resolved by the caller — BriefingEngine tries each
+    ///   - apiKey: resolved by the caller - BriefingEngine tries each
     ///     configured provider's key in order and falls back to the next
     ///     one on failure, so this service has no opinion on which
     ///     provider or key is "the" one to use.
@@ -77,7 +77,7 @@ struct OpenRouterService {
     ///   - webSearch: attach the OpenRouter-style web plugin, when enabled
     ///     in Settings.
     ///   - webResults: plugin max_results, configurable via research depth.
-    ///   - maxTokens: caps the response length when set — used by the
+    ///   - maxTokens: caps the response length when set - used by the
     ///     hourly breaking check to keep an already-cheap request cheap
     ///     even if the model tries to ramble.
     func complete(
@@ -105,9 +105,9 @@ struct OpenRouterService {
         if let familyFallbacks = Self.modelFamilyFallbacks[model] {
             // A named family (e.g. "openai:free") rather than one pinned
             // slug: send OpenRouter's own fallback-list field so it stays
-            // within that one company's models — trying the larger one
+            // within that one company's models - trying the larger one
             // first, falling back to the smaller one only if it's
-            // unavailable — instead of either pinning to a single free
+            // unavailable - instead of either pinning to a single free
             // model (which risks upstream rate-limiting when that one
             // model is oversubscribed) or using OpenRouter's own "auto"
             // routing, which is free to pick an unrelated provider like
@@ -130,7 +130,7 @@ struct OpenRouterService {
             ]
             // Deliberately not setting provider.require_parameters here.
             // That flag makes OpenRouter hard-reject any endpoint that
-            // can't fully honour every requested parameter — for
+            // can't fully honour every requested parameter - for
             // free-tier/open-weight models, that often leaves zero
             // qualifying endpoints and OpenRouter returns 404 "No
             // endpoints found" instead of routing anywhere at all.
@@ -196,7 +196,7 @@ struct OpenRouterService {
         )
     }
 
-    /// Validates a key by sending one minimal chat completion — this works
+    /// Validates a key by sending one minimal chat completion - this works
     /// against any OpenAI-style provider, unlike OpenRouter's proprietary
     /// `/key` introspection endpoint. Returns a short human-readable result.
     func testConnection(baseURL: URL, apiKey: String, model: String) async throws -> String {
@@ -234,7 +234,7 @@ struct OpenRouterService {
     }
 
     /// Sends `request`, retrying on 429 (rate limited) or 5xx (transient
-    /// server error) with backoff before giving up — a 429 means "too
+    /// server error) with backoff before giving up - a 429 means "too
     /// many requests," not "no credits" (that's 402), and it routinely
     /// clears within seconds. Concurrent research requests against a
     /// free-tier model are exactly the kind of burst that trips per-minute
@@ -284,7 +284,7 @@ struct OpenRouterService {
     /// OpenRouter specifically wraps a failure from the upstream company
     /// actually hosting a routed/free model as a generic top-level
     /// `error.message` (often just "Provider returned error") while the
-    /// real reason sits one level deeper in `error.metadata` — `raw` (the
+    /// real reason sits one level deeper in `error.metadata` - `raw` (the
     /// upstream's own error text) and `provider_name` (which upstream was
     /// used). Surfacing those turns an opaque "Provider returned error"
     /// into something like "Provider returned error (provider: Example
@@ -292,7 +292,7 @@ struct OpenRouterService {
     /// happened.
     private static func errorMessage(from data: Data) -> String {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            // Not JSON at all — surface the raw body so something is
+            // Not JSON at all - surface the raw body so something is
             // visible instead of nothing.
             let raw = String(decoding: data, as: UTF8.self).trimmingCharacters(in: .whitespacesAndNewlines)
             return raw.isEmpty ? "" : String(raw.prefix(300))

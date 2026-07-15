@@ -22,7 +22,7 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
     private(set) var currentSegmentIndex = 0
 
     /// Backing storage for `rate`. Clamping lives in the computed
-    /// property's setter rather than a `didSet` on `rate` itself —
+    /// property's setter rather than a `didSet` on `rate` itself -
     /// reassigning a property from inside its own `didSet` re-triggers
     /// that same `didSet`, which previously caused unbounded recursion
     /// and a stack-overflow crash the instant the playback rate changed.

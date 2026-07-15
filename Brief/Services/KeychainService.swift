@@ -64,7 +64,7 @@ enum KeychainService {
         }
     }
 
-    /// True when at least one provider has a saved key — used to gate
+    /// True when at least one provider has a saved key - used to gate
     /// whether generation can run at all.
     static func hasAnyAPIKey() -> Bool {
         loadAPIKey(.openRouter) != nil || loadAPIKey(.bazaarlink) != nil

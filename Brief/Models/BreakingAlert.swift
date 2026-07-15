@@ -2,7 +2,7 @@ import Foundation
 import SwiftData
 
 /// A single, rare, out-of-cycle alert surfaced by the hourly breaking
-/// check — reserved for something genuinely urgent enough to interrupt
+/// check - reserved for something genuinely urgent enough to interrupt
 /// Jerry's day, not the routine news the daily brief already covers.
 @Model
 final class BreakingAlert {

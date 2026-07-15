@@ -43,7 +43,7 @@ final class AppEnvironment {
         do {
             modelContainer = try ModelContainer(for: schema)
         } catch {
-            // Storage is unrecoverable — fall back to an in-memory store so
+            // Storage is unrecoverable - fall back to an in-memory store so
             // the app still launches and can regenerate today's brief.
             let fallback = ModelConfiguration(isStoredInMemoryOnly: true)
             modelContainer = try! ModelContainer(for: schema, configurations: fallback)
@@ -82,7 +82,7 @@ final class AppEnvironment {
     /// Launch-time work: restore Google, prune history, schedule the
     /// breaking-check background task and the morning reminder
     /// notification. Safe to call from multiple places (the app-level
-    /// launch task and Today's onAppear both call this) — the underlying
+    /// launch task and Today's onAppear both call this) - the underlying
     /// work runs exactly once, and every caller awaits the same
     /// completion. This matters because Today's generation reads
     /// `googleAuth`'s connection state to decide whether Calendar is

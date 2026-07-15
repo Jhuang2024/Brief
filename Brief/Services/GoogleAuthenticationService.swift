@@ -200,7 +200,7 @@ final class GoogleAuthenticationService {
     /// nothing beyond the read-only scope it names; callers state which one
     /// they need so a missing Gmail grant can never be papered over by a
     /// calendar-only session (or vice versa). Only a missing CALENDAR scope
-    /// moves the connection state to `.missingScope` — that state describes
+    /// moves the connection state to `.missingScope` - that state describes
     /// the primary Calendar connection shown in Settings, and Gmail being
     /// ungranted is an ordinary, deliberate configuration, not a broken one.
     func accessToken(requiring scope: String = calendarReadOnlyScope) async throws -> String {
