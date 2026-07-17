@@ -66,8 +66,13 @@ Written atomically (temp file + replace), JSON, ISO-8601 dates.
 Rules for writers:
 
 - **Publish opportunistically** — every time the app already refreshes its
-  peer-bridge snapshot (dashboard load/refresh). Overwrites are atomic, so
-  frequent writes are safe.
+  peer-bridge snapshot (dashboard load/refresh), when the app moves to the
+  background (the last reliable moment to capture a session's edits), and
+  after any background data sync that changes records (e.g. LockedInFit's
+  HealthKit observer imports). Overwrites are atomic, so frequent writes are
+  safe. Dashboard-load-only publishing is not enough: a feed written at
+  8 AM describes that day up to 8 AM, and the next morning's brief would
+  present those partial numbers as the whole day.
 - **`days[].date` is a local calendar day.** Compute each day's lines from that
   day's records only. Include a day only if it has something to say.
 - **Recurring reminders** (e.g. daily checklist items): project an occurrence

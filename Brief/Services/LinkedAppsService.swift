@@ -84,6 +84,17 @@ struct LinkedAppsService {
         // Negative age (a clock oddity) still renders; it just never counts
         // as aging.
         let isAging = age > Self.agingAfter
+        // A feed written before the briefing day began can only describe
+        // "yesterday" up to the moment it was written: steps, meals, and
+        // checklist ticks from later that day never made it in. The age
+        // check alone misses this (a feed from yesterday 8 AM is under 24h
+        // old at a 6 AM briefing), so say when the numbers are from — that
+        // honesty is the difference between "I only took 219 steps?!" and
+        // "ah, that's as of yesterday morning".
+        let isPartialDay = feed.generatedAt < calendar.startOfDay(for: now)
+        let statusNote: String? = isAging || isPartialDay
+            ? "As of \(Self.relativeDay(feed.generatedAt, now: now, calendar: calendar)). Open \(app.displayName) to refresh."
+            : nil
         return .init(
             app: app,
             availability: isAging ? .aging : .fresh,
@@ -91,9 +102,7 @@ struct LinkedAppsService {
             activityLabel: activity.label,
             activityLines: activity.lines,
             todayReminders: reminders,
-            statusNote: isAging
-                ? "As of \(Self.relativeDay(feed.generatedAt, now: now, calendar: calendar))."
-                : nil
+            statusNote: statusNote
         )
     }
 
@@ -169,7 +178,27 @@ struct LinkedAppsService {
                 overdue: overdue
             )
         }
-        return picked
+        // Writers project a recurring item as one occurrence per day (the
+        // write day and the next), so a feed written yesterday hands us the
+        // same daily item twice: yesterday's occurrence (now recomputed as
+        // "overdue") and today's projection. Recurring items reset daily by
+        // the writers' own convention — showing both, one badged Overdue,
+        // reads as two nagging duplicates. Collapse by title, preferring
+        // the occurrence that is actually due on the briefing day.
+        var collapsed: [LinkedAppReminder] = []
+        var indexByTitle: [String: Int] = [:]
+        for reminder in picked {
+            let key = reminder.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+            if let index = indexByTitle[key] {
+                if collapsed[index].overdue && !reminder.overdue {
+                    collapsed[index] = reminder
+                }
+                continue
+            }
+            indexByTitle[key] = collapsed.count
+            collapsed.append(reminder)
+        }
+        return collapsed
             .sorted {
                 if $0.overdue != $1.overdue { return $0.overdue }
                 if $0.dueDate != $1.dueDate { return $0.dueDate < $1.dueDate }
@@ -179,15 +208,18 @@ struct LinkedAppsService {
             .map { $0 }
     }
 
-    /// "today at 9:14 PM", "yesterday", "Friday": just enough to explain a
-    /// feed's age without a full timestamp.
+    /// "today at 9:14 PM", "yesterday at 7:58 AM", "Friday, Jul 11": just
+    /// enough to explain a feed's age without a full timestamp. Yesterday
+    /// keeps its time of day because the partial-day note above hinges on
+    /// it: "as of yesterday at 7:58 AM" explains a low step count in a way
+    /// a bare "yesterday" doesn't.
     private static func relativeDay(_ date: Date, now: Date, calendar: Calendar) -> String {
         if calendar.isDate(date, inSameDayAs: now) {
             return "today at \(DateFormatting.time.string(from: date))"
         }
         if let yesterday = calendar.date(byAdding: .day, value: -1, to: now),
            calendar.isDate(date, inSameDayAs: yesterday) {
-            return "yesterday"
+            return "yesterday at \(DateFormatting.time.string(from: date))"
         }
         let formatter = DateFormatter()
         formatter.calendar = calendar

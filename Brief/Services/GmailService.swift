@@ -21,26 +21,31 @@ struct GmailService {
     private let session = URLSession.shared
 
     /// Inbox messages received after `since`, newest first, capped at
-    /// `maxResults`. The goal is the mail Jerry would actually open: real
-    /// one-to-one messages and the updates that genuinely matter, not
-    /// newsletters, marketing, or automated digests.
+    /// `maxResults`. The bar is deliberately high: mail that is both
+    /// important and still unread. An empty result is a real, good answer
+    /// ("nothing important overnight"), never something to pad — recent but
+    /// unimportant mail (task-app digests, notification chatter) does not
+    /// belong in the brief just because it exists.
     ///
-    /// Two filters get there. First, Gmail's Promotions and Social tabs are
-    /// excluded at the query: marketing and network-noise mail Jerry never
-    /// wants in a brief. The category operators are safely inert on accounts
-    /// without a tabbed inbox (excluding a category that doesn't exist
-    /// excludes nothing). The Updates tab is deliberately kept, because that
-    /// is where the important transactional mail lands (security notices,
-    /// receipts, shipping, 2FA) and Jerry asked to keep "important updates."
+    /// Three filters get there. First, the query itself requires Gmail's
+    /// own importance marker (`is:important`, the signal Gmail learns from
+    /// how Jerry actually treats each sender) AND `is:unread` — mail
+    /// already read has been dealt with and needs no morning triage.
+    /// Promotions and Social stay excluded too; the category operators are
+    /// safely inert on accounts without a tabbed inbox.
     ///
-    /// Second, and this is what removes the newsletter/digest flood, any
-    /// message carrying a `List-Unsubscribe` header is dropped. Bulk senders
-    /// (newsletters, marketing, news digests, job-alert blasts) are required
-    /// to include it; genuine one-to-one mail, and the important transactional
-    /// updates worth keeping, generally don't. This catches bulk mail
-    /// wherever it sits, including the Updates tab and anything mis-filed into
-    /// Primary. The list request over-fetches so the header filter still
-    /// leaves a full section.
+    /// Second, any message carrying a `List-Unsubscribe` header is dropped.
+    /// Bulk senders (newsletters, marketing, news digests, job-alert
+    /// blasts) are required to include it; genuine one-to-one mail and the
+    /// real transactional updates worth keeping generally don't. This
+    /// catches bulk mail Gmail's importance model over-rates (it happily
+    /// marks a daily digest important once it's been opened a few times).
+    ///
+    /// Third, on-behalf automation mail is dropped by its From name: a
+    /// sender like "Me via Todoist" is an app echoing Jerry's own actions
+    /// back at him, not new information. The list request over-fetches so
+    /// the per-message filters still leave a full section when there IS
+    /// real mail.
     func fetchInboxMessages(since: Date, maxResults: Int = 10) async throws -> [EmailMessage] {
         let token = try await auth.accessToken(requiring: GoogleAuthenticationService.gmailReadOnlyScope)
 
@@ -48,10 +53,10 @@ struct GmailService {
         components.queryItems = [
             URLQueryItem(
                 name: "q",
-                value: "in:inbox -category:promotions -category:social after:\(Int(since.timeIntervalSince1970))"
+                value: "in:inbox is:important is:unread -category:promotions -category:social after:\(Int(since.timeIntervalSince1970))"
             ),
-            // Over-fetch: the List-Unsubscribe filter below removes bulk mail
-            // that slipped past the category exclusions, so ask for more IDs
+            // Over-fetch: the List-Unsubscribe and automation filters below
+            // remove junk that slipped past the query, so ask for more IDs
             // than we intend to show and trim after filtering.
             URLQueryItem(name: "maxResults", value: String(min(maxResults * 3, 40))),
         ]
@@ -108,6 +113,11 @@ struct GmailService {
         let from = headers.first { $0.name.caseInsensitiveCompare("From") == .orderedSame }?.value ?? ""
         let subject = headers.first { $0.name.caseInsensitiveCompare("Subject") == .orderedSame }?.value ?? ""
         let (name, address) = parseFrom(from)
+        // On-behalf automation ("Me via Todoist", "Jerry via Notion"): an
+        // app restating the user's own activity, never mail worth triage.
+        if name.range(of: " via ", options: .caseInsensitive) != nil {
+            return nil
+        }
         // internalDate is epoch milliseconds as a string.
         let receivedAt = Double(decoded.internalDate ?? "").map { Date(timeIntervalSince1970: $0 / 1000) }
 

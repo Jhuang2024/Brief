@@ -97,7 +97,10 @@ struct BriefContentView: View {
                     .foregroundStyle(Color.inkSecondary)
                     .fixedSize(horizontal: false, vertical: true)
             } else if brief.emailMessages.isEmpty {
-                Text("Nothing new overnight.")
+                // The section only ever shows important, still-unread mail;
+                // an empty morning is stated plainly rather than padded with
+                // whatever happens to be in the inbox.
+                Text("Nothing important overnight.")
                     .font(.subheadline)
                     .foregroundStyle(Color.inkSecondary)
             } else {
@@ -238,9 +241,12 @@ struct CalendarEventRow: View {
     }
 }
 
-/// One inbox message: time column, sender, subject, snippet, unread dot.
-/// Mirrors CalendarEventRow's layout so the brief reads as one system;
-/// everything shown is verbatim from Gmail.
+/// One inbox message: time column, sender, subject, snippet. Mirrors
+/// CalendarEventRow's layout so the brief reads as one system; everything
+/// shown is verbatim from Gmail. No unread dot: the section only ever
+/// contains mail that was unread when the brief was generated, and a dot
+/// claiming "unread" hours later (after Jerry has read the mail itself)
+/// read as the brief being wrong.
 struct EmailMessageRow: View {
     let message: EmailMessage
 
@@ -257,18 +263,10 @@ struct EmailMessageRow: View {
                 .padding(.vertical, 2)
 
             VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    if message.isUnread {
-                        Circle()
-                            .fill(Color.accentColor)
-                            .frame(width: 6, height: 6)
-                            .accessibilityLabel("Unread")
-                    }
-                    Text(message.fromName)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Color.inkSecondary)
-                        .lineLimit(1)
-                }
+                Text(message.fromName)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.inkSecondary)
+                    .lineLimit(1)
                 Text(message.subject)
                     .font(.system(size: 15, weight: .medium))
                     .foregroundStyle(Color.ink)
