@@ -64,6 +64,10 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
     /// Best on-device voice for the current language, chosen once. Enhanced
     /// and premium voices (if the user has downloaded any) sound markedly
     /// more natural than the compact default, and cost nothing to use.
+    /// `@ObservationIgnored` because `@Observable` cannot synthesize tracking
+    /// for a `lazy` stored property (its init accessor can't touch the lazy
+    /// backing store), and this value never needs to drive the UI anyway.
+    @ObservationIgnored
     private lazy var preferredVoice: AVSpeechSynthesisVoice? = Self.bestAvailableVoice()
 
     // MARK: Speed calibration
