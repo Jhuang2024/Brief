@@ -1,5 +1,6 @@
 import AVFoundation
 import Foundation
+import MediaPlayer
 
 /// Optional audio mode: reads the briefing aloud with the system
 /// speech synthesizer. Free, local, and deliberately simple.
@@ -45,13 +46,20 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
     /// Applies from the next utterance onward.
     var rate: Float {
         get { _rate }
-        set { _rate = min(max(newValue, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate) }
+        set {
+            _rate = min(max(newValue, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
+            updateNowPlaying()
+        }
     }
 
     private let synthesizer = AVSpeechSynthesizer()
     private var segments: [Segment] = []
     /// Cumulative UTF-16 offset at the start of each segment.
     private var segmentOffsets: [Int] = []
+
+    /// Lock-screen / Control Center metadata title.
+    private let nowPlayingTitle = "Your morning brief"
+    private var remoteCommandsConfigured = false
 
     /// Best on-device voice for the current language, chosen once. Enhanced
     /// and premium voices (if the user has downloaded any) sound markedly
@@ -117,10 +125,17 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         lastTickDate = nil
         lastTickChars = 0
 
+        // .playback keeps audio going when the phone is locked or the app is
+        // backgrounded (paired with the `audio` UIBackgroundMode), so the
+        // brief plays on like a song. The wake lock additionally stops the
+        // screen auto-locking while it's in the foreground.
         try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio)
         try? AVAudioSession.sharedInstance().setActive(true)
+        WakeLock.acquire("audio")
+        configureRemoteCommands()
         state = .playing
         speakCurrentSegment()
+        updateNowPlaying()
     }
 
     func pause() {
@@ -128,6 +143,8 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer.pauseSpeaking(at: .word)
         state = .paused
         lastTickDate = nil
+        WakeLock.release("audio")
+        updateNowPlaying()
     }
 
     func resume() {
@@ -135,6 +152,8 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         synthesizer.continueSpeaking()
         state = .playing
         lastTickDate = nil
+        WakeLock.acquire("audio")
+        updateNowPlaying()
     }
 
     /// Jump to the next story (not merely the next sentence).
@@ -151,6 +170,7 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         lastTickDate = nil
         state = .playing
         speakCurrentSegment()
+        updateNowPlaying()
     }
 
     /// Scrub to an arbitrary position, snapping to the nearest segment
@@ -169,6 +189,7 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         lastTickDate = nil
         state = .playing
         speakCurrentSegment()
+        updateNowPlaying()
     }
 
     func stop() {
@@ -180,6 +201,8 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         totalChars = 0
         lastTickDate = nil
         state = .idle
+        WakeLock.release("audio")
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
@@ -301,5 +324,65 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
             lastTickChars = clamped
         }
         spokenChars = clamped
+        updateNowPlaying()
+    }
+
+    // MARK: - Lock screen / remote controls
+
+    /// Publish the current position to the lock screen and Control Center so
+    /// the brief shows up — and can be controlled — like a playing track.
+    private func updateNowPlaying() {
+        guard state != .idle else {
+            MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            return
+        }
+        var info: [String: Any] = [:]
+        info[MPMediaItemPropertyTitle] = nowPlayingTitle
+        info[MPMediaItemPropertyArtist] = "Brief"
+        info[MPMediaItemPropertyPlaybackDuration] = totalDuration
+        info[MPNowPlayingInfoPropertyElapsedPlaybackTime] = elapsed
+        // Rate drives the lock-screen scrubber's smooth interpolation between
+        // our updates; 0 while paused freezes it. It scales with playback rate.
+        info[MPNowPlayingInfoPropertyPlaybackRate] =
+            state == .playing ? Double(_rate / AVSpeechUtteranceDefaultSpeechRate) : 0.0
+        MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+    }
+
+    /// Wire up lock-screen / headphone remote controls once. Handlers are
+    /// delivered on the main thread, but the closures are non-isolated, so we
+    /// hop back onto the main actor to touch playback state.
+    private func configureRemoteCommands() {
+        guard !remoteCommandsConfigured else { return }
+        remoteCommandsConfigured = true
+
+        let center = MPRemoteCommandCenter.shared()
+
+        center.playCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.resume() }
+            return .success
+        }
+        center.pauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.pause() }
+            return .success
+        }
+        center.togglePlayPauseCommand.addTarget { [weak self] _ in
+            Task { @MainActor in
+                guard let self else { return }
+                if self.state == .playing { self.pause() } else { self.resume() }
+            }
+            return .success
+        }
+        center.nextTrackCommand.addTarget { [weak self] _ in
+            Task { @MainActor in self?.skipStory() }
+            return .success
+        }
+        center.changePlaybackPositionCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
+            Task { @MainActor in
+                guard let self, self.totalDuration > 0 else { return }
+                self.seek(toProgress: event.positionTime / self.totalDuration)
+            }
+            return .success
+        }
     }
 }

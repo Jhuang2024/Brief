@@ -175,11 +175,16 @@ final class BriefingEngine {
             return await task.value
         }
         beginBackgroundTask()
+        // Keep the screen from auto-locking mid-generation: when the phone
+        // sleeps the app is suspended and the pipeline stalls. Held only for
+        // the duration of this run.
+        WakeLock.acquire("generation")
         let task = Task<DailyBrief?, Never> { [weak self] in
             await self?.run(trigger: trigger)
         }
         generationTask = task
         let result = await task.value
+        WakeLock.release("generation")
         endBackgroundTask()
         return result
     }
