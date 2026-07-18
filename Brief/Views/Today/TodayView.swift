@@ -113,7 +113,7 @@ struct TodayView: View {
                 .padding(.top, 20)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.bottom, viewModel.speech.state == .idle ? 24 : 96)
+            .padding(.bottom, viewModel.speech.state == .idle ? 24 : 132)
         }
         .refreshable {
             viewModel.refreshRequested()
