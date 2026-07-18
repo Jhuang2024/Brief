@@ -5,11 +5,11 @@ import MediaPlayer
 /// Optional audio mode: reads the briefing aloud with the system
 /// speech synthesizer. Free, local, and deliberately simple.
 ///
-/// Playback exposes a Spotify-style position: an accurate progress
-/// fraction (driven by the synthesizer's per-word range callbacks) plus
-/// elapsed/remaining times. The time estimate is calibrated against the
-/// speed the device is actually speaking at, so it stays honest and moves
-/// with the chosen playback rate — no network, no API credits.
+/// Playback exposes a Spotify-style position. The bar and clock are anchored
+/// to the synthesizer's real per-word progress — so they can never run out
+/// early or overshoot — and interpolated between those callbacks with a
+/// wall-clock tick so the numbers advance smoothly, second by second, rather
+/// than jumping a few times a second. No network, no API credits.
 @MainActor
 @Observable
 final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
@@ -30,11 +30,15 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
     private(set) var state: PlaybackState = .idle
     private(set) var currentSegmentIndex = 0
 
-    /// Characters spoken so far, across every segment. Drives the progress
-    /// bar. Updated word-by-word from the synthesizer, so it reflects the
-    /// true reading position rather than a guess.
+    /// Real characters spoken so far, taken word-by-word from the synthesizer.
+    /// This is ground truth for where playback actually is.
     private(set) var spokenChars = 0
     private(set) var totalChars = 0
+
+    /// Smoothly interpolated read position. Tracks `spokenChars` but advances
+    /// continuously between callbacks so the clock ticks each frame. Clamped
+    /// so it never gets more than a hair ahead of what's really been spoken.
+    private var interpolatedChars: Double = 0
 
     /// Backing storage for `rate`. Clamping lives in the computed
     /// property's setter rather than a `didSet` on `rate` itself:
@@ -48,18 +52,20 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         get { _rate }
         set {
             _rate = min(max(newValue, AVSpeechUtteranceMinimumSpeechRate), AVSpeechUtteranceMaximumSpeechRate)
-            updateNowPlaying()
+            // Times are derived from the rate, so they re-estimate at once —
+            // which is exactly the "it changes with speed" behaviour we want.
+            updateNowPlaying(force: true)
         }
     }
 
     private let synthesizer = AVSpeechSynthesizer()
-    private var segments: [Segment] = []
+    @ObservationIgnored private var segments: [Segment] = []
     /// Cumulative UTF-16 offset at the start of each segment.
-    private var segmentOffsets: [Int] = []
+    @ObservationIgnored private var segmentOffsets: [Int] = []
 
     /// Lock-screen / Control Center metadata title.
     private let nowPlayingTitle = "Your morning brief"
-    private var remoteCommandsConfigured = false
+    @ObservationIgnored private var remoteCommandsConfigured = false
 
     /// Best on-device voice for the current language, chosen once. Enhanced
     /// and premium voices (if the user has downloaded any) sound markedly
@@ -70,14 +76,27 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
     @ObservationIgnored
     private lazy var preferredVoice: AVSpeechSynthesisVoice? = Self.bestAvailableVoice()
 
-    // MARK: Speed calibration
+    // MARK: Speed model
+    //
+    // The displayed clock is stable: it uses a single characters-per-second
+    // figure that is measured once over a short warm-up at the start of
+    // playback and then held fixed (scaled by the playback rate). Because it
+    // no longer wobbles per word, elapsed and remaining stop jittering. And
+    // because every displayed value is derived from the *real* read position,
+    // remaining still lands on exactly 0:00 when the narration actually ends,
+    // even if the estimate is a little off in absolute terms.
 
-    /// Characters per second at the default rate, measured from how fast the
-    /// device actually speaks. Seeded with a reasonable guess and refined as
-    /// playback proceeds so the remaining-time estimate converges on reality.
-    private var baseCharsPerSecond = 15.0
-    private var lastTickDate: Date?
-    private var lastTickChars = 0
+    /// Characters per second at the default rate. Seeded, then measured once.
+    private var displayBaseCPS: Double = 15
+    @ObservationIgnored private var calibrated = false
+    @ObservationIgnored private var warmupChars = 0.0
+    @ObservationIgnored private var warmupTime = 0.0
+    @ObservationIgnored private var lastRealDate: Date?
+    @ObservationIgnored private var lastRealChars = 0
+
+    @ObservationIgnored private var tickTask: Task<Void, Never>?
+    @ObservationIgnored private var lastInterpDate: Date?
+    @ObservationIgnored private var lastNowPlayingDate: Date?
 
     override init() {
         super.init()
@@ -125,9 +144,17 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         }
         totalChars = running
         spokenChars = 0
+        interpolatedChars = 0
         currentSegmentIndex = 0
-        lastTickDate = nil
-        lastTickChars = 0
+
+        // Reset the speed model for a fresh run.
+        displayBaseCPS = 15
+        calibrated = false
+        warmupChars = 0
+        warmupTime = 0
+        lastRealDate = nil
+        lastRealChars = 0
+        lastInterpDate = nil
 
         // .playback keeps audio going when the phone is locked or the app is
         // backgrounded (paired with the `audio` UIBackgroundMode), so the
@@ -139,25 +166,28 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         configureRemoteCommands()
         state = .playing
         speakCurrentSegment()
-        updateNowPlaying()
+        startTicking()
+        updateNowPlaying(force: true)
     }
 
     func pause() {
         guard state == .playing else { return }
         synthesizer.pauseSpeaking(at: .word)
         state = .paused
-        lastTickDate = nil
+        lastRealDate = nil
+        lastInterpDate = nil
         WakeLock.release("audio")
-        updateNowPlaying()
+        updateNowPlaying(force: true)
     }
 
     func resume() {
         guard state == .paused else { return }
         synthesizer.continueSpeaking()
         state = .playing
-        lastTickDate = nil
+        lastRealDate = nil
+        lastInterpDate = nil
         WakeLock.acquire("audio")
-        updateNowPlaying()
+        updateNowPlaying(force: true)
     }
 
     /// Jump to the next story (not merely the next sentence).
@@ -170,11 +200,10 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         }
         synthesizer.stopSpeaking(at: .immediate)
         currentSegmentIndex = next
-        spokenChars = segmentOffsets[next]
-        lastTickDate = nil
+        anchorPosition(to: segmentOffsets[next])
         state = .playing
         speakCurrentSegment()
-        updateNowPlaying()
+        updateNowPlaying(force: true)
     }
 
     /// Scrub to an arbitrary position, snapping to the nearest segment
@@ -189,21 +218,22 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         }
         synthesizer.stopSpeaking(at: .immediate)
         currentSegmentIndex = index
-        spokenChars = segmentOffsets[index]
-        lastTickDate = nil
+        anchorPosition(to: segmentOffsets[index])
         state = .playing
         speakCurrentSegment()
-        updateNowPlaying()
+        updateNowPlaying(force: true)
     }
 
     func stop() {
         synthesizer.stopSpeaking(at: .immediate)
+        stopTicking()
         segments = []
         segmentOffsets = []
         currentSegmentIndex = 0
         spokenChars = 0
+        interpolatedChars = 0
         totalChars = 0
-        lastTickDate = nil
+        lastRealDate = nil
         state = .idle
         WakeLock.release("audio")
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
@@ -212,28 +242,77 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
 
     // MARK: - Position & timing
 
-    /// 0…1 fraction of the whole briefing that has been read.
-    var progress: Double {
-        guard totalChars > 0 else { return 0 }
-        return min(max(Double(spokenChars) / Double(totalChars), 0), 1)
+    /// Characters per second at the current rate.
+    private var displayCharsPerSecond: Double {
+        max(displayBaseCPS * Double(_rate / AVSpeechUtteranceDefaultSpeechRate), 1)
     }
 
-    /// Characters per second at the current rate, honoring the calibrated
-    /// base speed. Because it scales with `rate`, the times below move the
-    /// instant the listener changes speed.
-    private var effectiveCharsPerSecond: Double {
-        let scale = Double(_rate / AVSpeechUtteranceDefaultSpeechRate)
-        return max(baseCharsPerSecond * scale, 1)
+    /// 0…1 fraction of the whole briefing that has been read. Uses the
+    /// interpolated position so the bar glides rather than steps.
+    var progress: Double {
+        guard totalChars > 0 else { return 0 }
+        return min(max(interpolatedChars / Double(totalChars), 0), 1)
     }
 
     /// Estimated length of the whole briefing at the current rate.
     var totalDuration: TimeInterval {
         guard totalChars > 0 else { return 0 }
-        return Double(totalChars) / effectiveCharsPerSecond
+        return Double(totalChars) / displayCharsPerSecond
     }
 
-    var elapsed: TimeInterval { progress * totalDuration }
+    var elapsed: TimeInterval { interpolatedChars / displayCharsPerSecond }
     var remaining: TimeInterval { max(totalDuration - elapsed, 0) }
+
+    // MARK: - Interpolation tick
+
+    private func startTicking() {
+        tickTask?.cancel()
+        lastInterpDate = nil
+        tickTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1s
+                guard let self else { return }
+                self.tick()
+            }
+        }
+    }
+
+    private func stopTicking() {
+        tickTask?.cancel()
+        tickTask = nil
+        lastInterpDate = nil
+    }
+
+    /// Advance the interpolated position by real elapsed time, clamped so it
+    /// never overtakes what has actually been spoken by more than a beat.
+    private func tick() {
+        guard state == .playing, totalChars > 0 else {
+            lastInterpDate = nil
+            return
+        }
+        let now = Date()
+        // Clamp dt so a suspend/resume (e.g. returning from the background)
+        // can't make the clock lurch forward.
+        let dt = lastInterpDate.map { min(max(now.timeIntervalSince($0), 0), 1) } ?? 0
+        lastInterpDate = now
+        guard dt > 0 else { return }
+
+        let maxAhead = Double(lastRealChars) + displayCharsPerSecond * 0.75
+        let next = min(interpolatedChars + displayCharsPerSecond * dt, maxAhead, Double(totalChars))
+        if next > interpolatedChars {
+            interpolatedChars = next
+            updateNowPlaying()
+        }
+    }
+
+    /// Snap the read position to a known offset (after a skip or seek).
+    private func anchorPosition(to offset: Int) {
+        spokenChars = offset
+        interpolatedChars = Double(offset)
+        lastRealChars = offset
+        lastRealDate = nil
+        lastInterpDate = nil
+    }
 
     // MARK: - Speaking
 
@@ -277,69 +356,22 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
         return pool.max { rank($0.quality) < rank($1.quality) }
     }
 
-    // MARK: - AVSpeechSynthesizerDelegate
-
-    nonisolated func speechSynthesizer(
-        _ synthesizer: AVSpeechSynthesizer,
-        willSpeakRangeOfSpeechString characterRange: NSRange,
-        utterance: AVSpeechUtterance
-    ) {
-        Task { @MainActor in
-            guard state == .playing, currentSegmentIndex < segmentOffsets.count else { return }
-            let position = segmentOffsets[currentSegmentIndex] + characterRange.location
-            updateSpoken(to: position)
-        }
-    }
-
-    nonisolated func speechSynthesizer(
-        _ synthesizer: AVSpeechSynthesizer,
-        didFinish utterance: AVSpeechUtterance
-    ) {
-        Task { @MainActor in
-            guard state == .playing else { return }
-            if currentSegmentIndex < segments.count {
-                let end = segmentOffsets[currentSegmentIndex] + segments[currentSegmentIndex].length
-                updateSpoken(to: end)
-            }
-            currentSegmentIndex += 1
-            speakCurrentSegment()
-        }
-    }
-
-    /// Advance the spoken-character count and refine the measured speaking
-    /// speed from the wall-clock gap between callbacks.
-    private func updateSpoken(to position: Int) {
-        let clamped = min(max(position, spokenChars), totalChars)
-        let now = Date()
-        if let last = lastTickDate {
-            let dt = now.timeIntervalSince(last)
-            let dChars = Double(clamped - lastTickChars)
-            // Ignore tiny or negative intervals; they make the estimate jumpy.
-            if dt > 0.08, dChars > 0 {
-                let scale = Double(_rate / AVSpeechUtteranceDefaultSpeechRate)
-                let instantaneousBase = (dChars / dt) / max(scale, 0.01)
-                // Exponential moving average keeps the estimate stable.
-                baseCharsPerSecond = baseCharsPerSecond * 0.8 + instantaneousBase * 0.2
-                lastTickDate = now
-                lastTickChars = clamped
-            }
-        } else {
-            lastTickDate = now
-            lastTickChars = clamped
-        }
-        spokenChars = clamped
-        updateNowPlaying()
-    }
-
     // MARK: - Lock screen / remote controls
 
     /// Publish the current position to the lock screen and Control Center so
     /// the brief shows up — and can be controlled — like a playing track.
-    private func updateNowPlaying() {
+    private func updateNowPlaying(force: Bool = false) {
         guard state != .idle else {
             MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+            lastNowPlayingDate = nil
             return
         }
+        // The lock-screen scrubber interpolates itself from elapsed + rate, so
+        // ~1 Hz is plenty; throttle the frequent tick/progress updates and let
+        // real control events (play, seek, rate) push through immediately.
+        let now = Date()
+        if !force, let last = lastNowPlayingDate, now.timeIntervalSince(last) < 0.75 { return }
+        lastNowPlayingDate = now
         var info: [String: Any] = [:]
         info[MPMediaItemPropertyTitle] = nowPlayingTitle
         info[MPMediaItemPropertyArtist] = "Brief"
@@ -388,5 +420,69 @@ final class SpeechService: NSObject, AVSpeechSynthesizerDelegate {
             }
             return .success
         }
+    }
+
+    // MARK: - AVSpeechSynthesizerDelegate
+
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        willSpeakRangeOfSpeechString characterRange: NSRange,
+        utterance: AVSpeechUtterance
+    ) {
+        Task { @MainActor in
+            guard state == .playing, currentSegmentIndex < segmentOffsets.count else { return }
+            let position = segmentOffsets[currentSegmentIndex] + characterRange.location
+            recordRealProgress(to: position)
+        }
+    }
+
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer,
+        didFinish utterance: AVSpeechUtterance
+    ) {
+        Task { @MainActor in
+            guard state == .playing else { return }
+            if currentSegmentIndex < segments.count {
+                let end = segmentOffsets[currentSegmentIndex] + segments[currentSegmentIndex].length
+                recordRealProgress(to: end)
+            }
+            currentSegmentIndex += 1
+            speakCurrentSegment()
+        }
+    }
+
+    /// Fold in a real progress report: move the anchor, keep the interpolated
+    /// position honest, and refine the one-time speed measurement.
+    private func recordRealProgress(to position: Int) {
+        let clamped = min(max(position, spokenChars), totalChars)
+        let now = Date()
+
+        // Measure characters-per-second once, over a short warm-up window,
+        // then freeze it so the displayed clock stops moving on its own.
+        if !calibrated, let last = lastRealDate {
+            let dt = now.timeIntervalSince(last)
+            let dChars = Double(clamped - lastRealChars)
+            if dt > 0.08, dChars > 0 {
+                let scale = Double(_rate / AVSpeechUtteranceDefaultSpeechRate)
+                warmupChars += dChars / max(scale, 0.01)
+                warmupTime += dt
+                if warmupTime >= 2.5 {
+                    displayBaseCPS = min(max(warmupChars / warmupTime, 5), 40)
+                    calibrated = true
+                }
+            }
+        }
+        lastRealDate = now
+        lastRealChars = clamped
+        spokenChars = clamped
+
+        // Keep the interpolated position in step with the truth: never behind
+        // it, and never more than a beat ahead of it.
+        if interpolatedChars < Double(clamped) {
+            interpolatedChars = Double(clamped)
+        } else {
+            interpolatedChars = min(interpolatedChars, Double(clamped) + displayCharsPerSecond * 0.75)
+        }
+        updateNowPlaying()
     }
 }

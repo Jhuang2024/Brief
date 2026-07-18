@@ -33,12 +33,17 @@ struct AudioBar: View {
     // MARK: Progress
 
     private var progressSection: some View {
-        VStack(spacing: 5) {
+        // While scrubbing, preview the time under the finger; otherwise show
+        // the live, interpolated elapsed / remaining straight from the service.
+        let total = speech.totalDuration
+        let elapsed = scrubProgress.map { $0 * total } ?? speech.elapsed
+        let remaining = scrubProgress.map { max(total - $0 * total, 0) } ?? speech.remaining
+        return VStack(spacing: 5) {
             progressBar
             HStack {
-                Text(Self.timeString(displayedProgress * speech.totalDuration))
+                Text(Self.timeString(elapsed))
                 Spacer()
-                Text("-" + Self.timeString(speech.totalDuration - displayedProgress * speech.totalDuration))
+                Text("-" + Self.timeString(remaining))
             }
             .font(.system(size: 11, weight: .medium).monospacedDigit())
             .foregroundStyle(Color.inkSecondary)
